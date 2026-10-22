@@ -1,0 +1,83 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Halka (pasta) grafik: paylaşımı gösterir (JS gerektirmez). Yalnız pozitif değerler çizilir; yanında değer ve yüzde listesi vardır. *@
+
+<div class="hhg">
+    <div class="hhg-kutu">
+        <svg class="hhg-svg" viewBox="0 0 42 42" role="img" aria-label="@AriaEtiketi">
+            <circle class="hhg-zemin" cx="21" cy="21" r="15.9155" fill="none" stroke-width="5" />
+            @foreach (var p in dilimler)
+            {
+                <circle cx="21" cy="21" r="15.9155" fill="none" stroke="@(HoldingRenk.Hex(p.Renk))" stroke-width="5"
+                        stroke-dasharray="@(HoldingBicim.Css(p.Uzunluk)) @(HoldingBicim.Css(100m - p.Uzunluk))"
+                        stroke-dashoffset="@(HoldingBicim.Css(25m - p.Baslangic))">
+                    <title>@p.Etiket: @p.Metin (@HoldingBicim.Yuzde(p.Yuzde))</title>
+                </circle>
+            }
+        </svg>
+        <div class="hhg-merkez">
+            <div class="hhg-merkez-deger">@MerkezDeger</div>
+            @if (!string.IsNullOrEmpty(MerkezAlt))
+            {
+                <div class="hhg-merkez-alt">@MerkezAlt</div>
+            }
+        </div>
+    </div>
+
+    <ul class="hhg-liste">
+        @if (dilimler.Count == 0)
+        {
+            <li class="hhg-bos">@BosMesaj</li>
+        }
+        @foreach (var p in dilimler)
+        {
+            <li>
+                <i class="hhg-nokta" style="background:@(HoldingRenk.Hex(p.Renk))" aria-hidden="true"></i>
+                <span class="hhg-etiket" title="@p.Etiket">@p.Etiket</span>
+                <span class="hhg-deger"><strong>@HoldingBicim.Yuzde(p.Yuzde, 0)</strong> <span class="hhg-tutar">@p.Metin</span></span>
+            </li>
+        }
+    </ul>
+</div>
+
+@code {
+    private sealed record Parca(string Etiket, string Renk, decimal Baslangic, decimal Uzunluk, decimal Yuzde, string Metin);
+
+    [Parameter, EditorRequired] public IReadOnlyList<HoldingDilim> Dilimler { get; set; } = Array.Empty<HoldingDilim>();
+
+    /// <summary>Halkanın ortasındaki büyük metin ("13,17 Mn TL").</summary>
+    [Parameter] public string MerkezDeger { get; set; } = string.Empty;
+
+    [Parameter] public string? MerkezAlt { get; set; }
+
+    /// <summary>Dilim değerinin biçimi; verilmezse kısa para ("1,2 Mn TL").</summary>
+    [Parameter] public Func<decimal, string>? DegerBicimi { get; set; }
+
+    [Parameter] public string AriaEtiketi { get; set; } = "Pay dağılımı";
+
+    [Parameter] public string BosMesaj { get; set; } = "Dağılım için veri yok.";
+
+    private List<Parca> dilimler = new();
+
+    protected override void OnParametersSet()
+    {
+        var pozitif = Dilimler.Where(d => d.Deger > 0m).ToList();
+        var toplam = pozitif.Sum(d => d.Deger);
+        var bicim = DegerBicimi ?? HoldingBicim.ParaKisa;
+
+        dilimler = new List<Parca>();
+        if (toplam <= 0m)
+            return;
+
+        var baslangic = 0m;
+        foreach (var d in pozitif)
+        {
+            var yuzde = d.Deger / toplam * 100m;
+
+            // Dilimler arasında ince bir ayrım için çok parçalıda her dilimden küçük bir pay kırpılır.
+            var kirpma = pozitif.Count > 1 ? Math.Min(0.4m, yuzde / 4m) : 0m;
+            dilimler.Add(new Parca(d.Etiket, d.Renk, baslangic, Math.Max(yuzde - kirpma, 0.1m), yuzde, bicim(d.Deger)));
+            baslangic += yuzde;
+        }
+    }
+}

@@ -1,0 +1,108 @@
+﻿/* Bütçe konsolidasyonu */
+
+.hbu-yardim {
+    margin-bottom: 1rem;
+    padding: .6rem .85rem;
+    border: 1px dashed var(--crm-border, #cbd5e1);
+    border-radius: 10px;
+    font-size: .85rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hbu-bos {
+    padding: 1.5rem .5rem;
+    text-align: center;
+    font-size: .88rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hbu-hucre {
+    min-width: 11rem;
+}
+
+.hbu-ilerleme-kutu {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+}
+
+.hbu-ilerleme {
+    position: relative;
+    flex: 1 1 auto;
+    height: 9px;
+    border-radius: 5px;
+    background: var(--crm-surface-alt, rgba(100, 116, 139, .12));
+}
+
+[data-theme="dark"] .hbu-ilerleme {
+    background: rgba(148, 163, 184, .16);
+}
+
+.hbu-dolgu {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 5px;
+}
+
+/* Beklenen kullanım işareti */
+.hbu-isaret {
+    position: absolute;
+    top: -3px;
+    bottom: -3px;
+    width: 0;
+    border-left: 2px solid var(--crm-text, #0f172a);
+}
+
+.hbu-yuzde {
+    flex: 0 0 3rem;
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.hbu-durum {
+    display: inline-block;
+    padding: .12rem .55rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.hbu-normal {
+    background: rgba(16, 185, 129, .14);
+    color: #047857;
+}
+
+.hbu-hizli {
+    background: rgba(249, 115, 22, .16);
+    color: #c2410c;
+}
+
+.hbu-asim {
+    background: rgba(239, 68, 68, .14);
+    color: #b91c1c;
+}
+
+.hbu-yok {
+    background: rgba(100, 116, 139, .14);
+    color: #475569;
+}
+
+[data-theme="dark"] .hbu-normal {
+    color: #34d399;
+}
+
+[data-theme="dark"] .hbu-hizli {
+    color: #fb923c;
+}
+
+[data-theme="dark"] .hbu-asim {
+    color: #f87171;
+}
+
+[data-theme="dark"] .hbu-yok {
+    color: #cbd5e1;
+}

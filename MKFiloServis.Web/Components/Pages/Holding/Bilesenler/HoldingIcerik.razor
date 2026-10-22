@@ -1,0 +1,62 @@
+﻿@typeparam TVeri where TVeri : class
+
+@* Holding sayfalarının içerik kabuğu: ilk yüklemede iskelet, ilk yükleme başarısızsa hata + yeniden dene, sonraki
+   yüklemelerde içeriği soluklaştırır (zıplama olmaz). Veri varken hata olursa içerik korunur, üstte uyarı görünür. *@
+
+@if (Veri == null && Hata == null)
+{
+    <div class="row g-3" aria-busy="true">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="col-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body placeholder-glow">
+                        <span class="placeholder col-5 mb-3 d-block"></span>
+                        <span class="placeholder col-8 placeholder-lg d-block"></span>
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body placeholder-glow">
+                    <span class="placeholder col-12 d-block hic-iskelet-grafik"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (Veri == null)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+        <div class="flex-grow-1">@Hata</div>
+        <button type="button" class="btn btn-sm btn-outline-warning" @onclick="OnYenile">Yeniden dene</button>
+    </div>
+}
+else
+{
+    <div class="@(Yukleniyor ? "hic-yenileniyor" : null)" aria-busy="@(Yukleniyor ? "true" : "false")">
+        @if (Hata != null)
+        {
+            <div class="alert alert-warning d-flex align-items-center py-2 small" role="alert">
+                <i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>
+                <div class="flex-grow-1">@Hata</div>
+                <button type="button" class="btn btn-sm btn-outline-warning" @onclick="OnYenile">Yeniden dene</button>
+            </div>
+        }
+        @ChildContent(Veri)
+    </div>
+}
+
+@code {
+    [Parameter] public TVeri? Veri { get; set; }
+
+    [Parameter] public bool Yukleniyor { get; set; }
+
+    [Parameter] public string? Hata { get; set; }
+
+    [Parameter] public EventCallback OnYenile { get; set; }
+
+    [Parameter, EditorRequired] public RenderFragment<TVeri> ChildContent { get; set; } = default!;
+}

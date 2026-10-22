@@ -1,0 +1,98 @@
+﻿/* Holding dashboard. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.hdb-cumleler {
+    margin: 0;
+    padding-left: 1.15rem;
+}
+
+.hdb-cumleler li {
+    margin: .4rem 0;
+    font-size: .93rem;
+    line-height: 1.5;
+}
+
+.hdb-bolum {
+    margin: 1.5rem 0 .75rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.hdb-bos {
+    padding: .75rem .25rem;
+    text-align: center;
+    font-size: .88rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hdb-baglanti {
+    margin-top: .6rem;
+    text-align: center;
+    font-size: .82rem;
+}
+
+/* Nakit vade özeti */
+.hdb-vade {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .7rem;
+}
+
+@media (max-width: 575.98px) {
+    .hdb-vade {
+        grid-template-columns: 1fr;
+    }
+}
+
+.hdb-vade-blok {
+    padding: .7rem .8rem;
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-radius: 10px;
+}
+
+.hdb-vade-baslik {
+    font-size: .76rem;
+    font-weight: 600;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hdb-vade-toplam {
+    margin: .1rem 0 .4rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.hdb-vade-satir {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .2rem 0;
+    border-top: 1px dashed var(--crm-border, #e2e8f0);
+    font-size: .8rem;
+}
+
+.hdb-vade-satir > span {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hdb-vade-satir > strong {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hdb-kotu > strong {
+    color: #dc2626;
+}
+
+.hdb-uyari > strong {
+    color: #d97706;
+}
+
+[data-theme="dark"] .hdb-kotu > strong {
+    color: #f87171;
+}
+
+[data-theme="dark"] .hdb-uyari > strong {
+    color: #fbbf24;
+}

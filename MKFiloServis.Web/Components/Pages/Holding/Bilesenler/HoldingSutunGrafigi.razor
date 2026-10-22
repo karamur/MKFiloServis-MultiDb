@@ -1,0 +1,323 @@
+﻿@using MKFiloServis.Web.Helpers
+@using MKFiloServis.Web.Services
+@using MKFiloServis.Web.Services.Interfaces
+
+@* Çok serili sütun + çizgi grafiği (JS gerektirmez). Sütunlar yan yana ya da (Yigili) üst üste çizilir, çizgi serileri
+   aynı ölçekte üstüne biner. Negatif değerler (zarar) sıfır çizgisinin altına iner. Her kategori bir düğmedir: fare ipucu
+   verir, dokunmatik ekranda tıklayınca ayrıntısı grafiğin altında görünür. *@
+
+<div class="hsg" role="group" aria-label="@AriaEtiketi" style="--hsg-yuva:@(yuvaMax)px;--hsg-yigin:@(yiginMax)px">
+    @if (!VeriVar)
+    {
+        <div class="hsg-bos"><i class="bi bi-bar-chart me-2" aria-hidden="true"></i>@BosMesaj</div>
+    }
+    else
+    {
+        <div class="hsg-govde" style="height:@(Yukseklik)px">
+            <div class="hsg-eksen" aria-hidden="true">
+                @foreach (var isaret in olcek.Isaretler)
+                {
+                    <span class="hsg-eksen-deger" style="bottom:@(HoldingBicim.Css(olcek.Konum(isaret)))%">@HoldingBicim.Eksen(isaret)</span>
+                }
+            </div>
+            <div class="hsg-alan">
+                @foreach (var isaret in olcek.Isaretler)
+                {
+                    <i class="hsg-izgara @(isaret == 0m ? "hsg-taban" : null)" style="bottom:@(HoldingBicim.Css(olcek.Konum(isaret)))%"></i>
+                }
+                <div class="hsg-kategoriler">
+                    @for (var i = 0; i < Kategoriler.Count; i++)
+                    {
+                        var index = i;
+                        var k = Kategoriler[i];
+                        <button type="button"
+                                class="hsg-kat @(k.VeriVar ? null : "hsg-veriyok") @(secili == index ? "hsg-secili" : null)"
+                                title="@Ayrinti(index)" aria-label="@Ayrinti(index)" aria-pressed="@(secili == index ? "true" : "false")"
+                                @onclick="() => Sec(index)">
+                            @if (Yigili)
+                            {
+                                <span class="hsg-yuva hsg-yuva-yigin">
+                                    @foreach (var parca in YiginParcalari(index))
+                                    {
+                                        <span class="hsg-cubuk" style="bottom:@(parca.Alt)%;height:@(parca.Boy)%;background:@(parca.Renk)"></span>
+                                    }
+                                </span>
+                            }
+                            else
+                            {
+                                @foreach (var seri in sutunlar)
+                                {
+                                    <span class="hsg-yuva">
+                                        @if (Cubuk(seri, index) is { } c)
+                                        {
+                                            <span class="hsg-cubuk" style="bottom:@(c.Alt)%;height:@(c.Boy)%;background:@(HoldingRenk.Hex(seri.Renk))"></span>
+                                        }
+                                    </span>
+                                }
+                            }
+                        </button>
+                    }
+                </div>
+
+                @if (cizgiler.Count > 0)
+                {
+                    <svg class="hsg-cizgi" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        @foreach (var seri in cizgiler)
+                        {
+                            foreach (var parca in CizgiParcalari(seri))
+                            {
+                                <polyline points="@parca" fill="none" stroke="@(HoldingRenk.Hex(seri.Renk))" stroke-width="2.2"
+                                          stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                            }
+                        }
+                    </svg>
+                    @foreach (var seri in cizgiler)
+                    {
+                        @for (var i = 0; i < Kategoriler.Count; i++)
+                        {
+                            @if (Deger(seri, i) is { } d)
+                            {
+                                <span class="hsg-nokta"
+                                      style="left:@(HoldingBicim.Css((i + 0.5m) / Kategoriler.Count * 100m))%;bottom:@(HoldingBicim.Css(olcek.Konum(d)))%;background:@(HoldingRenk.Hex(seri.Renk))"></span>
+                            }
+                        }
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="hsg-etiketler" aria-hidden="true">
+            @foreach (var k in Kategoriler)
+            {
+                <span class="hsg-etiket @(k.Vurgulu ? "hsg-vurgulu" : null) @(k.VeriVar ? null : "hsg-soluk")">@k.Etiket</span>
+            }
+        </div>
+
+        <div class="hsg-detay" aria-live="polite">
+            @if (secili is { } s && s < Kategoriler.Count)
+            {
+                var k = Kategoriler[s];
+                <strong>@k.Aciklama</strong>
+                @if (!k.VeriVar)
+                {
+                    <span class="hsg-soluk">· veri toplanmamış</span>
+                }
+                else
+                {
+                    @foreach (var seri in Seriler)
+                    {
+                        <span class="hsg-ayrac">·</span>
+                        <span><i class="hsg-nokta-kucuk" style="background:@(HoldingRenk.Hex(seri.Renk))"></i>@seri.Ad <strong>@DegerMetni(Deger(seri, s))</strong></span>
+                    }
+                }
+            }
+            else if (ZirveMetni() is { } zirve)
+            {
+                <span class="hsg-soluk">@zirve</span>
+            }
+            else
+            {
+                <span class="hsg-soluk">Ayrıntı için bir sütuna tıklayın</span>
+            }
+        </div>
+
+        <div class="hsg-aciklama">
+            @foreach (var seri in Seriler)
+            {
+                <span><i class="hsg-nokta-kucuk @(seri.Tur == HoldingSeriTuru.Cizgi ? "hsg-nokta-yuvarlak" : null)" style="background:@(HoldingRenk.Hex(seri.Renk))"></i>@seri.Ad</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly record struct CubukKonumu(string Alt, string Boy);
+
+    private readonly record struct YiginParcasi(string Alt, string Boy, string Renk);
+
+    [Parameter, EditorRequired] public IReadOnlyList<HoldingKategori> Kategoriler { get; set; } = Array.Empty<HoldingKategori>();
+
+    [Parameter, EditorRequired] public IReadOnlyList<HoldingSeri> Seriler { get; set; } = Array.Empty<HoldingSeri>();
+
+    /// <summary>Sütun serileri yan yana değil, üst üste (toplam + pay) çizilir; negatif değerler yığına girmez.</summary>
+    [Parameter] public bool Yigili { get; set; }
+
+    [Parameter] public AylikBirim Birim { get; set; } = AylikBirim.Para;
+
+    /// <summary>Adet değerlerinin yanına yazılan birim ("araç", "kişi").</summary>
+    [Parameter] public string? AdetEki { get; set; }
+
+    [Parameter] public int Yukseklik { get; set; } = 230;
+
+    [Parameter] public string AriaEtiketi { get; set; } = "Aylık grafik";
+
+    [Parameter] public string BosMesaj { get; set; } = "Bu dönem için grafik verisi yok.";
+
+    private HoldingOlcek olcek = HoldingOlcek.Hesapla(0m, 0m, AylikBirim.Para);
+    private int yuvaMax = 18;
+    private int yiginMax = 34;
+    private List<HoldingSeri> sutunlar = new();
+    private List<HoldingSeri> cizgiler = new();
+    private int? secili;
+    private IReadOnlyList<HoldingSeri>? sonSeriler;
+
+    private bool VeriVar => Kategoriler.Count > 0 && Seriler.Any(s => s.Degerler.Any(d => d is { } v && v != 0m));
+
+    protected override void OnParametersSet()
+    {
+        // Yeni veri geldiğinde seçili kategori sıfırlanır.
+        if (!ReferenceEquals(sonSeriler, Seriler))
+        {
+            secili = null;
+            sonSeriler = Seriler;
+        }
+
+        sutunlar = Seriler.Where(s => s.Tur == HoldingSeriTuru.Sutun).ToList();
+        cizgiler = Seriler.Where(s => s.Tur == HoldingSeriTuru.Cizgi).ToList();
+
+        // Az kategoride (ör. 8 vade sütunu) sütunlar daha geniş çizilir; yan yana sütun arttıkça her biri daralır.
+        var seyrek = Kategoriler.Count <= 8;
+        yuvaMax = Math.Clamp((seyrek ? 56 : 36) / Math.Max(1, sutunlar.Count), 10, 34);
+        yiginMax = seyrek ? 46 : 34;
+
+        decimal enBuyuk = 0m, enKucuk = 0m;
+        for (var i = 0; i < Kategoriler.Count; i++)
+        {
+            if (Yigili)
+            {
+                var toplam = sutunlar.Sum(s => Math.Max(0m, Deger(s, i) ?? 0m));
+                enBuyuk = Math.Max(enBuyuk, toplam);
+            }
+            else
+            {
+                foreach (var s in sutunlar)
+                {
+                    if (Deger(s, i) is { } v)
+                    {
+                        enBuyuk = Math.Max(enBuyuk, v);
+                        enKucuk = Math.Min(enKucuk, v);
+                    }
+                }
+            }
+
+            foreach (var s in cizgiler)
+            {
+                if (Deger(s, i) is { } v)
+                {
+                    enBuyuk = Math.Max(enBuyuk, v);
+                    enKucuk = Math.Min(enKucuk, v);
+                }
+            }
+        }
+
+        olcek = HoldingOlcek.Hesapla(enKucuk, enBuyuk, Birim);
+    }
+
+    private void Sec(int index) => secili = secili == index ? null : index;
+
+    /// <summary>Kategoride veri yoksa (toplanmamış ay) değer yok sayılır.</summary>
+    private decimal? Deger(HoldingSeri seri, int index)
+        => index < Kategoriler.Count && Kategoriler[index].VeriVar && index < seri.Degerler.Count ? seri.Degerler[index] : null;
+
+    private CubukKonumu? Cubuk(HoldingSeri seri, int index)
+    {
+        if (Deger(seri, index) is not { } d || d == 0m || olcek.Aralik <= 0m)
+            return null;
+
+        var boy = Math.Max(Math.Abs(d) / olcek.Aralik * 100m, 0.8m);
+        var alt = d >= 0m ? olcek.Sifir : olcek.Sifir - boy;
+        return new CubukKonumu(HoldingBicim.Css(alt), HoldingBicim.Css(boy));
+    }
+
+    private IEnumerable<YiginParcasi> YiginParcalari(int index)
+    {
+        if (olcek.Aralik <= 0m)
+            yield break;
+
+        var birikim = 0m;
+        foreach (var seri in sutunlar)
+        {
+            if (Deger(seri, index) is not { } d || d <= 0m)
+                continue;
+
+            var boy = Math.Max(d / olcek.Aralik * 100m, 0.5m);
+            yield return new YiginParcasi(
+                HoldingBicim.Css(olcek.Sifir + birikim / olcek.Aralik * 100m),
+                HoldingBicim.Css(boy),
+                HoldingRenk.Hex(seri.Renk));
+            birikim += d;
+        }
+    }
+
+    /// <summary>Çizginin kesintisiz parçaları ("x,y x,y …"); verisi olmayan kategori çizgiyi böler.</summary>
+    private IEnumerable<string> CizgiParcalari(HoldingSeri seri)
+    {
+        var n = Kategoriler.Count;
+        var akim = new List<string>();
+        for (var i = 0; i < n; i++)
+        {
+            if (Deger(seri, i) is { } d)
+            {
+                akim.Add($"{HoldingBicim.Css((i + 0.5m) / n * 100m)},{HoldingBicim.Css(100m - olcek.Konum(d))}");
+            }
+            else if (akim.Count > 0)
+            {
+                yield return string.Join(' ', akim);
+                akim.Clear();
+            }
+        }
+
+        if (akim.Count > 0)
+            yield return string.Join(' ', akim);
+    }
+
+    private string DegerMetni(decimal? deger)
+    {
+        if (deger is not { } d)
+            return "—";
+
+        return Birim == AylikBirim.Para
+            ? HoldingBicim.ParaKisa(d)
+            : string.IsNullOrWhiteSpace(AdetEki) ? HoldingBicim.Sayi(d) : $"{HoldingBicim.Sayi(d)} {AdetEki}";
+    }
+
+    private string TamMetin(decimal? deger)
+    {
+        if (deger is not { } d)
+            return "veri yok";
+
+        return Birim == AylikBirim.Para
+            ? ParaFormat.FormatKisa(d)
+            : string.IsNullOrWhiteSpace(AdetEki) ? HoldingBicim.Sayi(d) : $"{HoldingBicim.Sayi(d)} {AdetEki}";
+    }
+
+    private string Ayrinti(int index)
+    {
+        var k = Kategoriler[index];
+        if (!k.VeriVar)
+            return $"{k.Aciklama} — veri toplanmamış";
+
+        return $"{k.Aciklama} — " + string.Join(", ", Seriler.Select(s => $"{s.Ad}: {TamMetin(Deger(s, index))}"));
+    }
+
+    /// <summary>İlk serinin en yüksek olduğu kategori ("En yüksek: Nisan 2026 · 13,17 Mn TL").</summary>
+    private string? ZirveMetni()
+    {
+        var ilk = Seriler.FirstOrDefault();
+        if (ilk is null)
+            return null;
+
+        int? enYuksek = null;
+        var enBuyuk = 0m;
+        for (var i = 0; i < Kategoriler.Count; i++)
+        {
+            if (Deger(ilk, i) is { } d && d > enBuyuk)
+            {
+                enBuyuk = d;
+                enYuksek = i;
+            }
+        }
+
+        return enYuksek is { } z ? $"En yüksek {ilk.Ad.ToLowerInvariant()}: {Kategoriler[z].Aciklama} · {DegerMetni(enBuyuk)}" : null;
+    }
+}

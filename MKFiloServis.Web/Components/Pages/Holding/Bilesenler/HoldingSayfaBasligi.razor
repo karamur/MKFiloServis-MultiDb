@@ -1,0 +1,34 @@
+﻿@* Holding sayfalarının ortak başlığı: simge + başlık + düz dille açıklama; sağda dönem seçici/eylemler, altında bilgi satırı. *@
+
+<header class="hsb">
+    <div class="hsb-sol">
+        <h2 class="hsb-baslik"><i class="bi @Ikon me-2" aria-hidden="true"></i>@Baslik</h2>
+        @if (!string.IsNullOrEmpty(Aciklama))
+        {
+            <p class="hsb-aciklama">@Aciklama</p>
+        }
+        @if (BilgiSatiri != null)
+        {
+            <div class="hsb-bilgi">@BilgiSatiri</div>
+        }
+    </div>
+    @if (Kontroller != null)
+    {
+        <div class="hsb-kontroller">@Kontroller</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Baslik { get; set; } = string.Empty;
+
+    [Parameter] public string Ikon { get; set; } = "bi-buildings";
+
+    /// <summary>Sayfanın ne gösterdiğini anlatan bir cümle.</summary>
+    [Parameter] public string? Aciklama { get; set; }
+
+    /// <summary>Dönem seçici, güncelle düğmesi vb. (sağ üst).</summary>
+    [Parameter] public RenderFragment? Kontroller { get; set; }
+
+    /// <summary>Başlığın altındaki bilgi satırı ("Nisan 2026 · veriler 21 Eki 14:20'de toplandı").</summary>
+    [Parameter] public RenderFragment? BilgiSatiri { get; set; }
+}

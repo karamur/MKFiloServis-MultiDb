@@ -1,0 +1,45 @@
+﻿/* Değişim rozeti */
+
+.hrz {
+    display: inline-flex;
+    align-items: center;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+
+.hrz i {
+    font-size: 1rem;
+    line-height: 1;
+    margin: 0 .05rem 0 -.2rem;
+}
+
+.hrz-iyi {
+    background: rgba(16, 185, 129, .14);
+    color: #047857;
+}
+
+.hrz-kotu {
+    background: rgba(239, 68, 68, .14);
+    color: #b91c1c;
+}
+
+.hrz-notr {
+    background: rgba(100, 116, 139, .14);
+    color: #475569;
+}
+
+[data-theme="dark"] .hrz-iyi {
+    color: #34d399;
+}
+
+[data-theme="dark"] .hrz-kotu {
+    color: #f87171;
+}
+
+[data-theme="dark"] .hrz-notr {
+    color: #cbd5e1;
+}

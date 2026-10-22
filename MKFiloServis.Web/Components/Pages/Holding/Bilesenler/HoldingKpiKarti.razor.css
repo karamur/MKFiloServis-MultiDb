@@ -1,0 +1,125 @@
+﻿/* Büyük rakam kartı. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.kpi {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: .95rem 1.05rem .8rem;
+    background: var(--crm-surface, #fff);
+    border: 1px solid transparent;
+    border-radius: var(--crm-radius, 14px);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+[data-theme="dark"] .kpi {
+    border-color: var(--crm-border, #334155);
+    box-shadow: none;
+}
+
+.kpi-ust {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    margin-bottom: .45rem;
+}
+
+.kpi-ikon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: .95rem;
+}
+
+.kpi-baslik {
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.kpi-deger {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--crm-text, #0f172a);
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-metin {
+    font-size: 1.2rem;
+    line-height: 1.3;
+}
+
+.kpi-olumsuz {
+    color: #dc2626;
+}
+
+[data-theme="dark"] .kpi-olumsuz {
+    color: #f87171;
+}
+
+.kpi-alt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem .5rem;
+    min-height: 1.5rem;
+    margin-top: .3rem;
+}
+
+.kpi-alt-metin {
+    font-size: .75rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.kpi-seri {
+    margin-top: auto;
+    padding-top: .5rem;
+}
+
+/* Telefonda iki sütunlu kartlara sığması için rakamlar küçülür (sarılmasın) */
+@media (max-width: 575.98px) {
+    .kpi {
+        padding: .8rem .85rem .7rem;
+    }
+
+    .kpi-deger {
+        font-size: 1.2rem;
+    }
+
+    .kpi-metin {
+        font-size: 1rem;
+    }
+
+    .kpi-kucuk .kpi-deger {
+        font-size: 1.05rem;
+    }
+}
+
+.kpi-kucuk {
+    padding: .75rem .9rem;
+}
+
+.kpi-kucuk .kpi-deger {
+    font-size: 1.2rem;
+}
+
+.kpi-kucuk .kpi-ikon {
+    flex-basis: 26px;
+    width: 26px;
+    height: 26px;
+    font-size: .85rem;
+}
+
+.kpi-kucuk .kpi-ust {
+    margin-bottom: .3rem;
+}
+
+.kpi-kucuk .kpi-alt {
+    min-height: 1.1rem;
+    margin-top: .15rem;
+}

@@ -1,0 +1,10 @@
+﻿@* Holding tabloları için ortak kabuk: duyarlı kaydırma, başlık/satır/alt toplam biçimi. İçerik (thead/tbody/tfoot) sayfadan gelir;
+   biçimler ::deep ile uygulanır. Sağa hizalı sayı sütunları için th/td'ye "sag" sınıfı verilir. *@
+
+<div class="htb table-responsive">
+    <table class="table table-sm align-middle mb-0">@ChildContent</table>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

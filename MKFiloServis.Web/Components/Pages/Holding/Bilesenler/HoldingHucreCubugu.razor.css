@@ -1,0 +1,25 @@
+﻿/* Tablo hücresi veri çubuğu */
+
+.hhc {
+    position: relative;
+    min-width: 7.5rem;
+    padding: .15rem .45rem;
+    border-radius: 4px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.hhc-dolgu {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    opacity: .22;
+    border-radius: 4px;
+}
+
+.hhc-metin {
+    position: relative;
+}

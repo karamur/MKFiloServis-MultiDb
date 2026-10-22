@@ -1,0 +1,16 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Seçilen dönemde eski yöntemle toplanmış aylar varsa yöneticiyi uyarır: rakamlar güncelle ile yenilenmelidir.
+   (Eski toplayıcı yalnız aktif firmayı görüyor, araç/maaş/hakedişi kayıt tarihine göre aylandırıyordu.) *@
+
+@if (Analiz is { DonemdekiEskiAylar.Count: > 0 } a)
+{
+    <HoldingNot Uyari="true">
+        <strong>@HoldingBicim.AyListesi(a.DonemdekiEskiAylar)</strong> verisi eski yöntemle toplanmış: o aylarda aktif firma dışındaki firmalar 0 görünebilir,
+        araç masrafı, maaş ve hakediş rakamları da farklı hesaplanmıştır. Doğru rakamlar için üstteki <strong>Güncelle</strong> düğmesini kullanın.
+    </HoldingNot>
+}
+
+@code {
+    [Parameter] public HoldingAnaliz? Analiz { get; set; }
+}

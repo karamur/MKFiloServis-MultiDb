@@ -1,0 +1,77 @@
+﻿/* Holding tablosu. İçerik sayfadan geldiği için seçiciler ::deep ile yazılır. */
+
+/* Hücre metni ve çizgileri sitenin tema değişkenlerine bağlanır; yoksa Bootstrap'in koyu metin rengi koyu temada okunmaz. */
+.htb ::deep .table {
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: transparent;
+    --bs-table-hover-bg: transparent;
+    --bs-table-color: var(--crm-text, #0f172a);
+    --bs-table-border-color: var(--crm-border, #e2e8f0);
+    color: var(--crm-text, #0f172a);
+}
+
+.htb ::deep thead th {
+    padding-top: .55rem;
+    padding-bottom: .55rem;
+    border-bottom: 2px solid var(--crm-border, #e2e8f0);
+    background: transparent;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .htb ::deep thead th {
+    background: transparent;
+    color: var(--crm-text-muted, #94a3b8);
+}
+
+.htb ::deep tbody td {
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    border-color: var(--crm-border, #e2e8f0);
+    font-variant-numeric: tabular-nums;
+}
+
+.htb ::deep tbody tr:hover > * {
+    background: var(--crm-surface-alt, #f8fafc);
+}
+
+.htb ::deep tfoot td {
+    border-top: 2px solid var(--crm-border, #e2e8f0);
+    border-bottom: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.htb ::deep .sag {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Dar ekranda tablo yatay kayar; firma adı ve sayılar satır bölmez */
+.htb ::deep td:first-child {
+    min-width: 9rem;
+}
+
+.htb ::deep .soluk {
+    color: var(--crm-text-muted, #94a3b8);
+}
+
+.htb ::deep .pozitif {
+    color: #047857;
+}
+
+.htb ::deep .negatif {
+    color: #b91c1c;
+}
+
+[data-theme="dark"] .htb ::deep .pozitif {
+    color: #34d399;
+}
+
+[data-theme="dark"] .htb ::deep .negatif {
+    color: #f87171;
+}

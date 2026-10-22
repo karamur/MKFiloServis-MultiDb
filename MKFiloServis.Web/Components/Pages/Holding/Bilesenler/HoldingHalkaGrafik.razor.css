@@ -1,0 +1,102 @@
+﻿/* Halka grafik */
+
+.hhg {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.25rem;
+}
+
+.hhg-kutu {
+    position: relative;
+    flex: 0 0 auto;
+    width: 168px;
+    height: 168px;
+    margin: 0 auto;
+}
+
+.hhg-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.hhg-zemin {
+    stroke: var(--crm-border, #e2e8f0);
+}
+
+.hhg-merkez {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 34px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.hhg-merkez-deger {
+    font-size: .92rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--crm-text, #0f172a);
+    overflow-wrap: anywhere;
+}
+
+.hhg-merkez-alt {
+    font-size: .7rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hhg-liste {
+    flex: 1 1 11rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.hhg-liste li {
+    display: grid;
+    grid-template-columns: .7rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .5rem;
+    padding: .32rem 0;
+    border-bottom: 1px dashed var(--crm-border, #e2e8f0);
+    font-size: .85rem;
+}
+
+.hhg-liste li:last-child {
+    border-bottom: 0;
+}
+
+.hhg-bos {
+    display: block !important;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hhg-nokta {
+    display: inline-block;
+    width: .7rem;
+    height: .7rem;
+    border-radius: 3px;
+}
+
+.hhg-etiket {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hhg-deger {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.hhg-tutar {
+    margin-left: .25rem;
+    font-size: .74rem;
+    color: var(--crm-text-muted, #64748b);
+}

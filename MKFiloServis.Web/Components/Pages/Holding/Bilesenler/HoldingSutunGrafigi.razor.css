@@ -1,0 +1,216 @@
+﻿/* Holding sütun/çizgi grafiği. Renkler app.css'teki --crm-* değişkenlerinden gelir (koyu temada otomatik uyum). */
+
+.hsg {
+    width: 100%;
+}
+
+.hsg-bos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 9rem;
+    padding: 1rem;
+    text-align: center;
+    font-size: .88rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hsg-govde {
+    position: relative;
+    display: flex;
+    padding-top: .5rem;
+}
+
+.hsg-eksen {
+    position: relative;
+    flex: 0 0 3.4rem;
+}
+
+.hsg-eksen-deger {
+    position: absolute;
+    right: .4rem;
+    transform: translateY(50%);
+    font-size: .66rem;
+    line-height: 1;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+}
+
+.hsg-alan {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.hsg-izgara {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 0;
+    border-top: 1px dashed var(--crm-border, #e2e8f0);
+    pointer-events: none;
+}
+
+/* Sıfır çizgisi: negatif değer olduğunda kâr/zarar ayrımı görünsün */
+.hsg-taban {
+    border-top-style: solid;
+    border-top-color: var(--crm-text-muted, #94a3b8);
+}
+
+.hsg-kategoriler {
+    position: absolute;
+    inset: 0;
+    display: flex;
+}
+
+.hsg-kat {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    padding: 0 2px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.hsg-kat:hover,
+.hsg-secili {
+    background: rgba(59, 130, 246, .12);
+}
+
+.hsg-kat:focus-visible {
+    outline: 2px solid var(--crm-primary, #2563eb);
+    outline-offset: -2px;
+}
+
+/* Verisi toplanmamış ay: hafif çizgili zemin */
+.hsg-veriyok {
+    background-image: repeating-linear-gradient(135deg, transparent 0, transparent 5px, rgba(148, 163, 184, .16) 5px, rgba(148, 163, 184, .16) 7px);
+}
+
+.hsg-yuva {
+    position: relative;
+    flex: 1 1 0;
+    max-width: var(--hsg-yuva, 18px);
+    height: 100%;
+}
+
+.hsg-yuva-yigin {
+    flex: 0 1 72%;
+    max-width: var(--hsg-yigin, 34px);
+}
+
+.hsg-cubuk {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-radius: 3px 3px 0 0;
+    transition: height .25s ease, bottom .25s ease;
+}
+
+.hsg-yuva-yigin .hsg-cubuk {
+    border-radius: 0;
+}
+
+.hsg-cizgi {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.hsg-nokta {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 2px solid var(--crm-surface, #fff);
+    border-radius: 50%;
+    transform: translate(-50%, 50%);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.hsg-etiketler {
+    display: flex;
+    margin: 4px 0 0 3.4rem;
+}
+
+.hsg-etiket {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    font-size: .68rem;
+    line-height: 1.1;
+    color: var(--crm-text-muted, #64748b);
+    white-space: nowrap;
+}
+
+.hsg-vurgulu {
+    font-weight: 700;
+    color: var(--crm-text, #0f172a);
+}
+
+.hsg-soluk,
+.hsg-ayrac {
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hsg-detay {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .15rem .6rem;
+    margin-top: .55rem;
+    padding: .35rem .55rem;
+    min-height: 2rem;
+    border-radius: 8px;
+    background: var(--crm-surface-alt, rgba(100, 116, 139, .08));
+    font-size: .78rem;
+}
+
+.hsg-aciklama {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .9rem;
+    margin-top: .45rem;
+    font-size: .72rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hsg-nokta-kucuk {
+    display: inline-block;
+    width: .6rem;
+    height: .6rem;
+    margin-right: .3rem;
+    border-radius: 2px;
+    vertical-align: -1px;
+}
+
+.hsg-nokta-yuvarlak {
+    border-radius: 50%;
+}
+
+/* Telefonda 12 ay etiketi birbirine girmesin */
+@media (max-width: 575.98px) {
+    .hsg-eksen {
+        flex-basis: 2.9rem;
+    }
+
+    .hsg-etiketler {
+        margin-left: 2.9rem;
+    }
+
+    .hsg-etiket {
+        font-size: .54rem;
+    }
+
+    .hsg-eksen-deger {
+        font-size: .6rem;
+    }
+}

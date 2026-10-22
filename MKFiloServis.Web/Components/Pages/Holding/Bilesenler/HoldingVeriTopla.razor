@@ -1,0 +1,88 @@
+﻿@using MKFiloServis.Shared.Time
+@using MKFiloServis.Web.Services
+@inject IHoldingService HoldingService
+@inject IToastService ToastService
+@inject ILogger<HoldingVeriTopla> Logger
+
+@* Holding verisini günceller: seçili dönemi ya da yılın tüm aylarını (Ocak – içinde bulunulan ay) toplar.
+   Toplama tüm aktif firmaları kapsar. İlerleme düğmenin yanında görünür. *@
+
+<div class="hvt">
+    <button type="button" class="btn btn-warning btn-sm" disabled="@toplaniyor" @onclick="DonemiTopla"
+            title="@(Ay == 0 ? "Yılın tüm aylarının verisini yeniden toplar" : "Seçili ayın verisini yeniden toplar")">
+        <i class="bi @(toplaniyor ? "bi-hourglass-split" : "bi-arrow-repeat") me-1" aria-hidden="true"></i>@(Ay == 0 ? "Yılı güncelle" : "Güncelle")
+    </button>
+    @if (Ay > 0 && !Kompakt)
+    {
+        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@toplaniyor" @onclick="YiliTopla"
+                title="Ocak ayından başlayarak yılın tüm aylarının verisini toplar (grafiklerin dolması için)">
+            <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>Yılı güncelle
+        </button>
+    }
+    @if (toplaniyor && !string.IsNullOrEmpty(ilerleme))
+    {
+        <span class="hvt-ilerleme" role="status">@ilerleme</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Yil { get; set; }
+
+    /// <summary>1–12: yalnız o ay (ve ayrıca "Yılı güncelle"); 0: yılın tüm ayları.</summary>
+    [Parameter, EditorRequired] public int Ay { get; set; }
+
+    /// <summary>Yalnızca tek düğme (boş durum kartları için).</summary>
+    [Parameter] public bool Kompakt { get; set; }
+
+    /// <summary>Toplama bitince (veriyi yeniden yüklemek için) çağrılır.</summary>
+    [Parameter] public EventCallback OnTamamlandi { get; set; }
+
+    private bool toplaniyor;
+    private string? ilerleme;
+
+    private Task DonemiTopla() => ToplaAsync(Ay == 0 ? YilinAylari() : [Ay]);
+
+    private Task YiliTopla() => ToplaAsync(YilinAylari());
+
+    /// <summary>Ocak'tan, içinde bulunulan yılda bugünkü aya kadar (gelecek aylarda toplanacak veri yoktur).</summary>
+    private List<int> YilinAylari()
+    {
+        var bugun = BusinessTime.Today;
+        var son = Yil == bugun.Year ? bugun.Month : Yil < bugun.Year ? 12 : 0;
+        return Enumerable.Range(1, son).ToList();
+    }
+
+    private async Task ToplaAsync(IReadOnlyList<int> aylar)
+    {
+        if (toplaniyor || aylar.Count == 0)
+            return;
+
+        toplaniyor = true;
+        try
+        {
+            for (var i = 0; i < aylar.Count; i++)
+            {
+                ilerleme = aylar.Count > 1
+                    ? $"{HoldingBicim.AyAdi(aylar[i])} toplanıyor ({i + 1}/{aylar.Count})…"
+                    : $"{HoldingBicim.Donem(Yil, aylar[i])} toplanıyor…";
+                await InvokeAsync(StateHasChanged);
+                await HoldingService.ToplaVeKaydetAsync(Yil, aylar[i]);
+            }
+
+            ToastService.ShowSuccess(aylar.Count > 1
+                ? $"{Yil} yılı holding verisi güncellendi ({aylar.Count} ay)."
+                : $"{HoldingBicim.Donem(Yil, aylar[0])} holding verisi güncellendi.");
+            await OnTamamlandi.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Holding veri toplama hatası");
+            ToastService.ShowError($"Veri toplama hatası: {ex.Message}");
+        }
+        finally
+        {
+            toplaniyor = false;
+            ilerleme = null;
+        }
+    }
+}

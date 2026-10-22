@@ -1,0 +1,12 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Firma adı + firmanın sabit rengi (tüm holding ekranlarında aynı firma aynı renktedir). *@
+
+<span class="hfe" title="@Ad"><i class="hfe-nokta" style="background:@(HoldingRenk.Hex(HoldingRenk.Firma(Sira)))" aria-hidden="true"></i>@Ad</span>
+
+@code {
+    [Parameter, EditorRequired] public string Ad { get; set; } = string.Empty;
+
+    /// <summary>Firmanın renk sırası (<see cref="HoldingFirmaOzeti.Sira"/>).</summary>
+    [Parameter, EditorRequired] public int Sira { get; set; }
+}

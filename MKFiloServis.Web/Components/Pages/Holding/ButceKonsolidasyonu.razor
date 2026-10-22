@@ -1,90 +1,222 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
 @page "/holding/butce"
 @attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
 @rendermode InteractiveServer
-@using MKFiloServis.Shared.Entities
+@inherits HoldingSayfaTabani<HoldingButceSayfasi>
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
-@inject IHoldingService HoldingService
-@inject ILogger<ButceKonsolidasyonu> Logger
 
-<PageTitle>Butce Konsolidasyonu</PageTitle>
+<PageTitle>Bütçe Konsolidasyonu</PageTitle>
 
-@if (isLoading)
-{
-    <div class="d-flex justify-content-center align-items-center" style="height: 50vh;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Yukleniyor...</span>
-        </div>
-    </div>
-}
-else
-{
-    <div class="container-fluid">
-        <h4 class="mb-3"><i class="bi bi-calculator me-2"></i>Butce Konsolidasyonu</h4>
+<div class="container-fluid">
+    <HoldingSayfaBasligi Baslik="Bütçe Konsolidasyonu" Ikon="bi-calculator"
+                         Aciklama="Tüm firmaların yıllık harcama hedefini ve bugüne kadar harcananı tek yerde izleyin.">
+        <Kontroller>
+            <HoldingDonemSecici Yil="Yil" Ay="Ay" TumYilVar="false" VeriVarAylar="@(Veri?.Butce.VeriliAylar)" Mesgul="Yukleniyor" OnDegisti="DonemDegistiAsync" />
+            <HoldingVeriTopla Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync" />
+        </Kontroller>
+        <BilgiSatiri>
+            @if (Veri != null)
+            {
+                <span class="hdo-donem">@HoldingBicim.Donem(Veri.Butce.Yil, Veri.Butce.Ay)</span>
+                <span> · yıl başından bu ayın sonuna kadar gerçekleşen</span>
+                @if (Veri.Analiz.SonGuncellemeUtc is { } zaman)
+                {
+                    <span> · veriler @HoldingBicim.Zaman(zaman) tarihinde toplandı</span>
+                }
+            }
+        </BilgiSatiri>
+    </HoldingSayfaBasligi>
 
-        <div class="row mb-3">
-            <div class="col-auto">
-                <select class="form-select" @bind="seciliYil" @bind:after="YenidenYukle">
-                    @for (int y = DateTime.UtcNow.Year; y >= DateTime.UtcNow.Year - 3; y--)
-                    {
-                        <option value="@y">@y</option>
-                    }
-                </select>
-            </div>
-        </div>
+    <HoldingNot>
+        Bütçe hedefi bir <strong>harcama sınırıdır</strong>: kullanım %100'ü geçerse bütçe aşılmış demektir.
+        Gösterge ve tablodaki çizgi, geçen süreye göre <strong>beklenen</strong> kullanımı gösterir.
+    </HoldingNot>
 
-        @if (veriler.Count == 0)
+    <HoldingIcerik Veri="Veri!" Yukleniyor="Yukleniyor" Hata="@Hata" OnYenile="YenidenYukleAsync" Context="v">
+        @{
+            var b = v.Butce;
+        }
+
+        <HoldingEskiVeriNotu Analiz="v.Analiz" />
+
+        @if (!b.VeriVar)
         {
-            <div class="alert alert-info">Secilen donemde veri bulunamadi.</div>
+            <HoldingBosDurum Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync"
+                             Mesaj="@($"{HoldingBicim.Donem(b.Yil, b.Ay)} için bütçe verisi toplanmamış. Güncelle ile toplayabilirsiniz; bütçe hedefi tanımlı değilse önce Bütçe modülünden hedef girilmelidir.")" />
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-dark">
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-xl-3">
+                    <HoldingKpiKarti Baslik="Yıllık Bütçe Hedefi" Ikon="bi-bullseye" Renk="@HoldingRenk.Butce"
+                                     Deger="@(b.HedefVar ? HoldingBicim.ParaKisa(b.Hedef) : "—")" Ipucu="@HoldingBicim.ParaTam(b.Hedef)"
+                                     AltMetin="@(b.HedefVar ? $"Aylık ortalama {HoldingBicim.ParaKisa(b.AylikBeklenen)}" : "Hedef tanımlı değil")" />
+                </div>
+                <div class="col-6 col-xl-3">
+                    <HoldingKpiKarti Baslik="Harcanan" Ikon="bi-cash-stack" Renk="@HoldingRenk.Gider"
+                                     Deger="@HoldingBicim.ParaKisa(b.Gerceklesen)" Ipucu="@HoldingBicim.ParaTam(b.Gerceklesen)"
+                                     AltMetin="@($"Ocak – {HoldingBicim.AyAdi(b.Ay)}")" />
+                </div>
+                <div class="col-6 col-xl-3">
+                    <HoldingKpiKarti Baslik="@(b.Kalan >= 0m ? "Kalan Bütçe" : "Aşım")" Ikon="@(b.Kalan >= 0m ? "bi-piggy-bank" : "bi-exclamation-triangle")"
+                                     Renk="@(b.Kalan >= 0m ? HoldingRenk.Gelir : HoldingRenk.Gider)"
+                                     Deger="@(b.HedefVar ? HoldingBicim.ParaKisa(Math.Abs(b.Kalan)) : "—")" Ipucu="@HoldingBicim.ParaTam(b.Kalan)"
+                                     Olumsuz="@(b.HedefVar && b.Kalan < 0m)"
+                                     AltMetin="@(b.HedefVar ? (b.Kalan >= 0m ? "Hedefin henüz kullanılmayan kısmı" : "Hedefin üzerinde harcandı") : null)" />
+                </div>
+                <div class="col-6 col-xl-3">
+                    <HoldingKpiKarti Baslik="Bütçe Kullanımı" Ikon="bi-speedometer2" Renk="@ButceRengi(b.Durum)"
+                                     Deger="@(b.HedefVar ? HoldingBicim.Yuzde(b.Kullanim) : "—")" Olumsuz="@(b.Durum == HoldingButceDurumu.Asim)"
+                                     AltMetin="@(b.HedefVar ? $"Beklenen {HoldingBicim.Yuzde(b.BeklenenYuzde)} · {DurumMetni(b.Durum)}" : null)" />
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-5 col-xl-4">
+                    <HoldingKart Baslik="Holding Bütçe Kullanımı" AltBaslik="@($"{b.Yil} yıllık hedef")" Ikon="bi-speedometer2" Renk="@HoldingRenk.Butce">
+                        @if (b.HedefVar)
+                        {
+                            <HoldingGosterge Yuzde="b.Kullanim" Isaret="b.BeklenenYuzde" Renk="@ButceRengi(b.Durum)"
+                                             DegerMetni="@HoldingBicim.Yuzde(b.Kullanim, 0)" Baslik="@DurumBasligi(b.Durum)"
+                                             AltMetin="@($"{HoldingBicim.ParaKisa(b.Gerceklesen)} / {HoldingBicim.ParaKisa(b.Hedef)} · çizgi: {HoldingBicim.AyAdi(b.Ay)} sonu için beklenen {HoldingBicim.Yuzde(b.BeklenenYuzde, 0)}")" />
+                        }
+                        else
+                        {
+                            <div class="hbu-bos">Hiçbir firmada bu yıl için bütçe hedefi tanımlı değil.</div>
+                        }
+                    </HoldingKart>
+                </div>
+                <div class="col-12 col-lg-7 col-xl-8">
+                    <HoldingKart Baslik="Firma Bazında Hedef ve Harcanan" AltBaslik="Çubuk: hedef ve bugüne kadar harcanan" Ikon="bi-bar-chart-steps" Renk="@HoldingRenk.Gider">
+                        <HoldingCubukListesi Satirlar="FirmaSatirlari(b)" BosMesaj="Firma bütçe verisi yok." />
+                    </HoldingKart>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <HoldingKart Baslik="Aylık Bütçe Ödemeleri" AltBaslik="@($"{b.Yil} yılı, tüm firmaların ödediği tutar; çizgi: hedefin aylık eşit payı")" Ikon="bi-bar-chart-line" Renk="@HoldingRenk.Butce">
+                    <HoldingSutunGrafigi Kategoriler="@(AylikKategoriler(b))" Seriler="@(AylikSeriler(b))"
+                                         AriaEtiketi="Aylık bütçe ödemeleri grafiği" BosMesaj="Bu yıl için ödenen bütçe kalemi yok." />
+                </HoldingKart>
+            </div>
+
+            <HoldingKart Baslik="Bütçe Tablosu" AltBaslik="@($"{HoldingBicim.Donem(b.Yil, b.Ay)} sonu itibarıyla")" Ikon="bi-table" Renk="@HoldingRenk.Notr">
+                <HoldingTablo>
+                    <thead>
                         <tr>
                             <th>Firma</th>
-                            <th class="text-end">Butce Hedef</th>
-                            <th class="text-end">Gerceklesen</th>
-                            <th class="text-end">Fark</th>
-                            <th class="text-end">Basari %</th>
+                            <th class="sag">Yıllık Hedef</th>
+                            <th class="sag">Harcanan</th>
+                            <th class="sag">Kalan</th>
+                            <th>Kullanım</th>
+                            <th>Durum</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var v in veriler.OrderBy(v => v.FirmaAdi))
+                        @foreach (var f in b.Firmalar)
                         {
-                            var fark = (v.ToplamGelir) - (v.ButceHedef ?? 0);
-                            var basari = v.ButceHedef > 0 ? (v.ToplamGelir / v.ButceHedef.Value * 100) : 0m;
                             <tr>
-                                <td>@v.FirmaAdi</td>
-                                <td class="text-end">@(v.ButceHedef?.ToString("N2") ?? "-")</td>
-                                <td class="text-end">@v.ToplamGelir.ToString("N2")</td>
-                                <td class="text-end @(fark >= 0 ? "text-success" : "text-danger")">@fark.ToString("N2")</td>
-                                <td class="text-end">@(v.ButceHedef > 0 ? basari.ToString("F1") + "%" : "-")</td>
+                                <td><HoldingFirmaEtiketi Ad="@f.FirmaAdi" Sira="f.Sira" /></td>
+                                <td class="sag @(f.Hedef == 0m ? "soluk" : null)" title="@HoldingBicim.ParaTam(f.Hedef)">@(f.Hedef > 0m ? HoldingBicim.Para(f.Hedef) : "—")</td>
+                                <td class="sag" title="@HoldingBicim.ParaTam(f.Gerceklesen)">@HoldingBicim.Para(f.Gerceklesen)</td>
+                                <td class="sag @(f.Hedef == 0m ? "soluk" : f.Kalan >= 0m ? "pozitif" : "negatif")" title="@HoldingBicim.ParaTam(f.Kalan)">@(f.Hedef > 0m ? HoldingBicim.Para(f.Kalan) : "—")</td>
+                                <td class="hbu-hucre">
+                                    @if (f.Hedef > 0m)
+                                    {
+                                        <div class="hbu-ilerleme-kutu" title="Kullanım @HoldingBicim.Yuzde(f.Kullanim); @HoldingBicim.AyAdi(b.Ay) sonu için beklenen @HoldingBicim.Yuzde(b.BeklenenYuzde)">
+                                            <span class="hbu-ilerleme" aria-hidden="true">
+                                                <span class="hbu-dolgu" style="width:@(HoldingBicim.Css(Math.Min(f.Kullanim, 100m)))%;background:@(HoldingRenk.Hex(ButceRengi(f.Durum)))"></span>
+                                                <i class="hbu-isaret" style="left:@(HoldingBicim.Css(b.BeklenenYuzde))%"></i>
+                                            </span>
+                                            <span class="hbu-yuzde">@HoldingBicim.Yuzde(f.Kullanim, 0)</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="soluk">—</span>
+                                    }
+                                </td>
+                                <td><span class="hbu-durum hbu-@DurumSinifi(f.Durum)">@DurumMetni(f.Durum)</span></td>
                             </tr>
                         }
                     </tbody>
-                </table>
-            </div>
+                    <tfoot>
+                        <tr>
+                            <td>Toplam</td>
+                            <td class="sag">@HoldingBicim.Para(b.Hedef)</td>
+                            <td class="sag">@HoldingBicim.Para(b.Gerceklesen)</td>
+                            <td class="sag @(b.Kalan >= 0m ? "pozitif" : "negatif")">@(b.HedefVar ? HoldingBicim.Para(b.Kalan) : "—")</td>
+                            <td>@(b.HedefVar ? HoldingBicim.Yuzde(b.Kullanim, 0) : "—")</td>
+                            <td><span class="hbu-durum hbu-@DurumSinifi(b.Durum)">@DurumMetni(b.Durum)</span></td>
+                        </tr>
+                    </tfoot>
+                </HoldingTablo>
+            </HoldingKart>
         }
-    </div>
-}
+    </HoldingIcerik>
+</div>
 
 @code {
-    private bool isLoading = true;
-    private List<HoldingVeri> veriler = new();
-    private int seciliYil = DateTime.UtcNow.Year;
+    /// <summary>Bütçe "bu aya kadar" okunur; tüm yıl seçeneği yoktur.</summary>
+    protected override bool TumYilDestekli => false;
 
-    protected override async Task OnInitializedAsync() => await Yukle();
+    protected override Task<HoldingButceSayfasi> VeriGetirAsync(int yil, int ay)
+        => HoldingSayfaVerisi.ButceSayfasiAsync(HoldingService, yil, ay, Bugun);
 
-    private async Task Yukle()
+    private static string ButceRengi(HoldingButceDurumu durum) => durum switch
     {
-        isLoading = true;
-        try { veriler = await HoldingService.GetButceKonsolidasyonAsync(seciliYil); }
-        finally { isLoading = false; }
+        HoldingButceDurumu.Asim => HoldingRenk.Gider,
+        HoldingButceDurumu.Hizli => HoldingRenk.Uyari,
+        HoldingButceDurumu.Normal => HoldingRenk.Gelir,
+        _ => HoldingRenk.Notr
+    };
+
+    private static string DurumSinifi(HoldingButceDurumu durum) => durum switch
+    {
+        HoldingButceDurumu.Asim => "asim",
+        HoldingButceDurumu.Hizli => "hizli",
+        HoldingButceDurumu.Normal => "normal",
+        _ => "yok"
+    };
+
+    private static string DurumMetni(HoldingButceDurumu durum) => durum switch
+    {
+        HoldingButceDurumu.Asim => "Aşıldı",
+        HoldingButceDurumu.Hizli => "Hızlı harcanıyor",
+        HoldingButceDurumu.Normal => "Kontrol altında",
+        _ => "Hedef yok"
+    };
+
+    private static string DurumBasligi(HoldingButceDurumu durum) => durum switch
+    {
+        HoldingButceDurumu.Asim => "Bütçe aşıldı",
+        HoldingButceDurumu.Hizli => "Beklenenden hızlı harcanıyor",
+        _ => "Bütçe kontrol altında"
+    };
+
+    private static IReadOnlyList<HoldingCubukSatiri> FirmaSatirlari(HoldingButceOzeti b)
+        => b.Firmalar
+            .Select(f => new HoldingCubukSatiri(
+                f.FirmaAdi,
+                f.Hedef > 0m ? $"Kullanım {HoldingBicim.Yuzde(f.Kullanim, 0)} · {DurumMetni(f.Durum)}" : "Hedef tanımlı değil",
+                [
+                    new HoldingCubukDegeri("Hedef", f.Hedef, HoldingBicim.ParaKisa(f.Hedef), HoldingRenk.Butce),
+                    new HoldingCubukDegeri("Harcanan", f.Gerceklesen, HoldingBicim.ParaKisa(f.Gerceklesen), ButceRengi(f.Durum))
+                ],
+                HoldingRenk.Firma(f.Sira)))
+            .ToList();
+
+    private static IReadOnlyList<HoldingKategori> AylikKategoriler(HoldingButceOzeti b)
+        => Enumerable.Range(1, 12)
+            .Select(m => new HoldingKategori(HoldingBicim.AyKisa(m), HoldingBicim.Donem(b.Yil, m), b.Aylik[m - 1].HasValue, m == b.Ay))
+            .ToList();
+
+    private static IReadOnlyList<HoldingSeri> AylikSeriler(HoldingButceOzeti b)
+    {
+        var seriler = new List<HoldingSeri> { new("Ödenen", HoldingRenk.Gider, b.Aylik) };
+        if (b.HedefVar)
+            seriler.Add(new HoldingSeri("Aylık eşit pay (hedef ÷ 12)", HoldingRenk.Butce, Enumerable.Repeat<decimal?>(b.AylikBeklenen, 12).ToList(), HoldingSeriTuru.Cizgi));
+        return seriler;
     }
-
-    private async Task YenidenYukle() => await Yukle();
 }
-

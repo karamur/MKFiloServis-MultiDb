@@ -1,0 +1,6 @@
+﻿/* Dönem bilgi satırı */
+
+.hdo-donem {
+    font-weight: 700;
+    color: var(--crm-text, #0f172a);
+}

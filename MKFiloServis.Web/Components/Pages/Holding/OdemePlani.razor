@@ -1,110 +1,267 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
 @page "/holding/odemeler"
 @attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
 @rendermode InteractiveServer
-@using MKFiloServis.Shared.Entities
+@inherits HoldingSayfaTabani<HoldingOdemeSayfasi>
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
-@inject IHoldingService HoldingService
-@inject ILogger<OdemePlani> Logger
 
-<PageTitle>Odeme Plani</PageTitle>
+<PageTitle>Ödeme Planı</PageTitle>
 
-@if (isLoading)
-{
-    <div class="d-flex justify-content-center align-items-center" style="height: 50vh;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Yukleniyor...</span>
-        </div>
-    </div>
-}
-else
-{
-    <div class="container-fluid">
-        <h4 class="mb-3"><i class="bi bi-cash-stack me-2"></i>Odeme Plani</h4>
+<div class="container-fluid">
+    <HoldingSayfaBasligi Baslik="Ödeme Planı" Ikon="bi-cash-stack"
+                         Aciklama="Önümüzdeki ödemeleri ve tahsilatları vade sırasıyla görün; geciken tutarları ve dönem ödeme durumunu takip edin.">
+        <Kontroller>
+            <HoldingDonemSecici Yil="Yil" Ay="Ay" VeriVarAylar="@(Veri?.Analiz.VeriliAylar)" Mesgul="Yukleniyor" OnDegisti="DonemDegistiAsync" />
+            <HoldingVeriTopla Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync" />
+        </Kontroller>
+        <BilgiSatiri>
+            <HoldingDonemBilgisi Analiz="Veri?.Analiz" />
+        </BilgiSatiri>
+    </HoldingSayfaBasligi>
 
-        <div class="row mb-3">
-            <div class="col-auto">
-                <select class="form-select" @bind="seciliYil">
-                    @for (int y = DateTime.UtcNow.Year; y >= DateTime.UtcNow.Year - 3; y--)
-                    {
-                        <option value="@y">@y</option>
-                    }
-                </select>
-            </div>
-            <div class="col-auto">
-                <select class="form-select" @bind="seciliAy">
-                    <option value="">Tum Aylar</option>
-                    @for (int a = 1; a <= 12; a++)
-                    {
-                        <option value="@a">@(new DateTime(2024, a, 1).ToString("MMMM"))</option>
-                    }
-                </select>
-            </div>
-            <div class="col-auto">
-                <button class="btn btn-primary" @onclick="YenidenYukle">
-                    <i class="bi bi-arrow-repeat me-1"></i> Yenile
-                </button>
-            </div>
-        </div>
+    <HoldingIcerik Veri="Veri!" Yukleniyor="Yukleniyor" Hata="@Hata" OnYenile="YenidenYukleAsync" Context="v">
+        @{
+            var a = v.Analiz;
+            var t = a.Toplam;
+            var vade = v.Vade;
+        }
 
-        @if (veriler.Count == 0)
+        @* ───── A) Güncel vade takvimi (canlı) ───── *@
+        <h2 class="hop-bolum">
+            <i class="bi bi-calendar-week me-2" aria-hidden="true"></i>Güncel Vade Takvimi
+            <span class="hop-bolum-alt">bugünkü açık faturalar · üstteki dönem seçiminden bağımsız</span>
+        </h2>
+
+        @if (vade == null)
         {
-            <div class="alert alert-info">Secilen donemde veri bulunamadi.</div>
+            <HoldingNot Uyari="true">@(v.VadeHatasi ?? "Vade bilgisi şu anda alınamadı.") Sayfayı yenileyerek yeniden deneyebilirsiniz.</HoldingNot>
+        }
+        else if (vade.Bos)
+        {
+            <HoldingNot>Ödenmemiş (açık) alış ya da satış faturası bulunmuyor.</HoldingNot>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-dark">
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="Toplam Ödenecek" Ikon="bi-box-arrow-up-right" Renk="@HoldingRenk.Gider"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Borc.Toplam)" Ipucu="@HoldingBicim.ParaTam(vade.Borc.Toplam)"
+                                     AltMetin="@($"{vade.Borc.Adet} alış faturası")" />
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="Vadesi Geçmiş Borç" Ikon="bi-exclamation-octagon" Renk="@HoldingRenk.Gider"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Borc.Gecikmis)" Ipucu="@HoldingBicim.ParaTam(vade.Borc.Gecikmis)"
+                                     Olumsuz="@(vade.Borc.Gecikmis > 0m)"
+                                     AltMetin="@(vade.Borc.GecikmisAdet > 0 ? $"{vade.Borc.GecikmisAdet} fatura gecikmiş" : "Geciken ödeme yok")" />
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="7 Gün İçinde Ödenecek" Ikon="bi-clock" Renk="@HoldingRenk.Uyari"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Borc.YediGunIcinde)" Ipucu="@HoldingBicim.ParaTam(vade.Borc.YediGunIcinde)"
+                                     AltMetin="@($"{vade.Borc.Kova(HoldingVadeKovasi.YediGun).Adet} fatura")" />
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="Toplam Tahsil Edilecek" Ikon="bi-box-arrow-in-down-left" Renk="@HoldingRenk.Gelir"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Alacak.Toplam)" Ipucu="@HoldingBicim.ParaTam(vade.Alacak.Toplam)"
+                                     AltMetin="@($"{vade.Alacak.Adet} satış faturası")" />
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="Vadesi Geçmiş Alacak" Ikon="bi-hourglass-bottom" Renk="@HoldingRenk.Uyari"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Alacak.Gecikmis)" Ipucu="@HoldingBicim.ParaTam(vade.Alacak.Gecikmis)"
+                                     AltMetin="@(vade.Alacak.GecikmisAdet > 0 ? $"{vade.Alacak.GecikmisAdet} fatura gecikmiş" : "Geciken tahsilat yok")" />
+                </div>
+                <div class="col-6 col-md-4 col-xl-2">
+                    <HoldingKpiKarti Kucuk="true" Baslik="Net Nakit Durumu" Ikon="bi-arrow-left-right" Renk="@HoldingRenk.Kar"
+                                     Deger="@HoldingBicim.ParaKisa(vade.Net)" Ipucu="@HoldingBicim.ParaTam(vade.Net)" Olumsuz="@(vade.Net < 0m)"
+                                     AltMetin="Tahsil edilecek − ödenecek" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <HoldingKart Baslik="Vadeye Göre Ödenecek ve Tahsil Edilecek" AltBaslik="Gecikenler solda; ardından önümüzdeki aylar" Ikon="bi-bar-chart-line" Renk="@HoldingRenk.Uyari">
+                    <HoldingSutunGrafigi Kategoriler="@(TakvimKategorileri(vade))" Seriler="@(TakvimSerileri(vade))"
+                                         AriaEtiketi="Vadeye göre ödenecek ve tahsil edilecek tutarlar" />
+                </HoldingKart>
+            </div>
+
+            <div class="mb-4">
+                <HoldingKart Baslik="Firma Bazında Vade Dökümü" AltBaslik="Ödenecek (alış) faturaları vade aralıklarına göre" Ikon="bi-table" Renk="@HoldingRenk.Notr">
+                    <HoldingTablo>
+                        <thead>
+                            <tr>
+                                <th>Firma</th>
+                                <th class="sag">Vadesi Geçmiş</th>
+                                <th class="sag">7 Gün İçinde</th>
+                                <th class="sag">8–30 Gün</th>
+                                <th class="sag">31–90 Gün</th>
+                                <th class="sag">90 Günden Sonra</th>
+                                <th class="sag">Vadesiz</th>
+                                <th class="sag">Toplam Ödenecek</th>
+                                <th class="sag">Tahsil Edilecek</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var f in vade.Firmalar)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@f.FirmaAdi</td>
+                                    <td class="sag @(f.Borc.Gecikmis > 0m ? "negatif" : "soluk")">@Tutar(f.Borc.Gecikmis)</td>
+                                    <td class="sag @(f.Borc.YediGunIcinde > 0m ? null : "soluk")">@Tutar(f.Borc.YediGunIcinde)</td>
+                                    <td class="sag @(f.Borc.Kova(HoldingVadeKovasi.OtuzGun).Tutar > 0m ? null : "soluk")">@Tutar(f.Borc.Kova(HoldingVadeKovasi.OtuzGun).Tutar)</td>
+                                    <td class="sag @(f.Borc.Kova(HoldingVadeKovasi.DoksanGun).Tutar > 0m ? null : "soluk")">@Tutar(f.Borc.Kova(HoldingVadeKovasi.DoksanGun).Tutar)</td>
+                                    <td class="sag @(f.Borc.Kova(HoldingVadeKovasi.DahaSonra).Tutar > 0m ? null : "soluk")">@Tutar(f.Borc.Kova(HoldingVadeKovasi.DahaSonra).Tutar)</td>
+                                    <td class="sag @(f.Borc.Kova(HoldingVadeKovasi.Vadesiz).Tutar > 0m ? null : "soluk")">@Tutar(f.Borc.Kova(HoldingVadeKovasi.Vadesiz).Tutar)</td>
+                                    <td class="sag fw-semibold">@Tutar(f.Borc.Toplam)</td>
+                                    <td class="sag">@Tutar(f.Alacak.Toplam)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td>Toplam</td>
+                                <td class="sag">@Tutar(vade.Borc.Gecikmis)</td>
+                                <td class="sag">@Tutar(vade.Borc.YediGunIcinde)</td>
+                                <td class="sag">@Tutar(vade.Borc.Kova(HoldingVadeKovasi.OtuzGun).Tutar)</td>
+                                <td class="sag">@Tutar(vade.Borc.Kova(HoldingVadeKovasi.DoksanGun).Tutar)</td>
+                                <td class="sag">@Tutar(vade.Borc.Kova(HoldingVadeKovasi.DahaSonra).Tutar)</td>
+                                <td class="sag">@Tutar(vade.Borc.Kova(HoldingVadeKovasi.Vadesiz).Tutar)</td>
+                                <td class="sag">@Tutar(vade.Borc.Toplam)</td>
+                                <td class="sag">@Tutar(vade.Alacak.Toplam)</td>
+                            </tr>
+                        </tfoot>
+                    </HoldingTablo>
+                </HoldingKart>
+            </div>
+        }
+
+        @* ───── B) Dönem ödeme durumu (anlık görüntü) ───── *@
+        <h2 class="hop-bolum">
+            <i class="bi bi-wallet2 me-2" aria-hidden="true"></i>Dönem Ödeme Durumu
+            <span class="hop-bolum-alt">@HoldingBicim.Donem(a.Yil, a.Ay) · o döneme ait alış faturaları</span>
+        </h2>
+
+        <HoldingEskiVeriNotu Analiz="a" />
+
+        @if (!a.VeriVar)
+        {
+            <HoldingBosDurum Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync" />
+        }
+        else
+        {
+            @if (!t.OdenmemisBilgisiVar)
+            {
+                <HoldingNot Uyari="true">
+                    Bu dönem için ödenmemiş fatura tutarı toplanmamış (eski anlık görüntü). Üstteki <strong>Güncelle</strong> düğmesi bu bilgiyi de getirir.
+                </HoldingNot>
+            }
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-lg-5 col-xl-4">
+                    <HoldingKart Baslik="Giderlerin Ödenme Oranı" AltBaslik="@HoldingBicim.Donem(a.Yil, a.Ay)" Ikon="bi-wallet2" Renk="@HoldingRenk.Gelir">
+                        @if (t.OdenmeOrani is { } odenme)
+                        {
+                            <HoldingGosterge Yuzde="odenme" Renk="@OdemeRengi(odenme)" DegerMetni="@HoldingBicim.Yuzde(odenme, 0)"
+                                             Baslik="@(odenme >= 90m ? "Giderler büyük oranda ödendi" : odenme >= 70m ? "Ödenmemiş giderler birikiyor" : "Ödenmemiş gider yüksek")"
+                                             AltMetin="@($"Ödenmemiş {HoldingBicim.ParaKisa(t.OdenmemisFatura)} / Gider {HoldingBicim.ParaKisa(t.Gider)}")" />
+                        }
+                        else
+                        {
+                            <div class="hop-bos">Ödenme oranı hesaplanamadı (ödenmemiş tutar toplanmamış ya da gider yok).</div>
+                        }
+                    </HoldingKart>
+                </div>
+                <div class="col-12 col-lg-7 col-xl-8">
+                    <HoldingKart Baslik="Firma Bazında Ödenen ve Ödenmemiş" AltBaslik="Dönem giderinin ödeme durumu" Ikon="bi-bar-chart-steps" Renk="@HoldingRenk.Uyari">
+                        <HoldingCubukListesi Satirlar="OdemeSatirlari(a)" BosMesaj="Bu dönemde gider kaydı yok." />
+                    </HoldingKart>
+                </div>
+            </div>
+
+            <HoldingKart Baslik="Dönem Ödeme Tablosu" AltBaslik="@HoldingBicim.Donem(a.Yil, a.Ay)" Ikon="bi-table" Renk="@HoldingRenk.Notr">
+                <HoldingTablo>
+                    <thead>
                         <tr>
                             <th>Firma</th>
-                            <th class="text-end">Toplam Gider</th>
-                            <th class="text-end">Odenmemis Fatura</th>
-                            <th class="text-end">Odenme Orani</th>
-                            <th class="text-end">Hakedis Toplam</th>
+                            <th class="sag">Toplam Gider</th>
+                            <th class="sag">Ödenen</th>
+                            <th class="sag">Ödenmemiş</th>
+                            <th class="sag">Ödeme Oranı</th>
+                            <th class="sag">Onaylı Hakediş</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var v in veriler.OrderByDescending(v => v.OdenmemisFaturaToplam ?? 0))
+                        @foreach (var f in a.Firmalar.OrderByDescending(x => x.OdenmemisFatura).ThenByDescending(x => x.Gider))
                         {
-                            var odenmeOrani = v.ToplamGider > 0
-                                ? Math.Max(0, 100 - (v.OdenmemisFaturaToplam > 0 ? (v.OdenmemisFaturaToplam ?? 0) / v.ToplamGider * 100 : 0))
-                                : 0;
                             <tr>
-                                <td>@v.FirmaAdi</td>
-                                <td class="text-end">@v.ToplamGider.ToString("N2")</td>
-                                <td class="text-end text-danger">@(v.OdenmemisFaturaToplam?.ToString("N2") ?? "-")</td>
-                                <td class="text-end @(odenmeOrani > 90 ? "text-success" : odenmeOrani > 70 ? "text-warning" : "text-danger")">@(v.ToplamGider > 0 ? odenmeOrani.ToString("F1") + "%" : "-")</td>
-                                <td class="text-end">@(v.HakedisToplam?.ToString("N2") ?? "-")</td>
+                                <td><HoldingFirmaEtiketi Ad="@f.FirmaAdi" Sira="f.Sira" /></td>
+                                @if (!f.VeriVar)
+                                {
+                                    <td colspan="5" class="soluk">Bu dönem için veri toplanmamış</td>
+                                }
+                                else
+                                {
+                                    <td class="sag" title="@HoldingBicim.ParaTam(f.Gider)">@HoldingBicim.Para(f.Gider)</td>
+                                    <td class="sag">@(f.OdenmemisBilgisiVar ? HoldingBicim.Para(f.Gider - f.OdenmemisFatura) : "—")</td>
+                                    <td class="sag @(f.OdenmemisFatura > 0m ? "negatif" : "soluk")">@(f.OdenmemisBilgisiVar ? HoldingBicim.Para(f.OdenmemisFatura) : "—")</td>
+                                    <td class="sag">
+                                        @if (f.OdenmeOrani is { } fo)
+                                        {
+                                            <HoldingHucreCubugu Oran="fo" Metin="@HoldingBicim.Yuzde(fo, 0)" Renk="@OdemeRengi(fo)" />
+                                        }
+                                        else
+                                        {
+                                            <span class="soluk">—</span>
+                                        }
+                                    </td>
+                                    <td class="sag @(f.Hakedis == 0m ? "soluk" : null)">@HoldingBicim.Para(f.Hakedis)</td>
+                                }
                             </tr>
                         }
                     </tbody>
-                </table>
-            </div>
+                    <tfoot>
+                        <tr>
+                            <td>Toplam</td>
+                            <td class="sag">@HoldingBicim.Para(t.Gider)</td>
+                            <td class="sag">@(t.OdenmemisBilgisiVar ? HoldingBicim.Para(t.Gider - t.OdenmemisFatura) : "—")</td>
+                            <td class="sag">@(t.OdenmemisBilgisiVar ? HoldingBicim.Para(t.OdenmemisFatura) : "—")</td>
+                            <td class="sag">@(t.OdenmeOrani is { } to ? HoldingBicim.Yuzde(to, 0) : "—")</td>
+                            <td class="sag">@HoldingBicim.Para(t.Hakedis)</td>
+                        </tr>
+                    </tfoot>
+                </HoldingTablo>
+            </HoldingKart>
         }
-    </div>
-}
+    </HoldingIcerik>
+</div>
 
 @code {
-    private bool isLoading = true;
-    private List<HoldingVeri> veriler = new();
-    private int seciliYil = DateTime.UtcNow.Year;
-    private string seciliAy = "";
+    protected override Task<HoldingOdemeSayfasi> VeriGetirAsync(int yil, int ay)
+        => HoldingSayfaVerisi.OdemeSayfasiAsync(HoldingService, yil, ay, Bugun, ex => Gunluk.LogWarning(ex, "Holding vade özeti alınamadı"));
 
-    protected override async Task OnInitializedAsync() => await Yukle();
+    private static string Tutar(decimal tutar) => tutar == 0m ? "—" : HoldingBicim.Para(tutar);
 
-    private async Task Yukle()
-    {
-        isLoading = true;
-        try
-        {
-            int? ay = string.IsNullOrEmpty(seciliAy) ? null : int.Parse(seciliAy);
-            veriler = await HoldingService.GetFirmaKarsilastirmaAsync(seciliYil, ay);
-        }
-        finally { isLoading = false; }
-    }
+    private static string OdemeRengi(decimal oran) => oran >= 90m ? HoldingRenk.Gelir : oran >= 70m ? HoldingRenk.Uyari : HoldingRenk.Gider;
 
-    private async Task YenidenYukle() => await Yukle();
+    private static IReadOnlyList<HoldingKategori> TakvimKategorileri(HoldingVadeOzeti vade)
+        => vade.Takvim.Select(x => new HoldingKategori(x.Etiket, x.Aciklama, true, x.Gecikmis)).ToList();
+
+    private static IReadOnlyList<HoldingSeri> TakvimSerileri(HoldingVadeOzeti vade) =>
+    [
+        new HoldingSeri("Ödenecek (alış)", HoldingRenk.Gider, vade.Takvim.Select(x => (decimal?)x.Borc).ToList()),
+        new HoldingSeri("Tahsil edilecek (satış)", HoldingRenk.Gelir, vade.Takvim.Select(x => (decimal?)x.Alacak).ToList())
+    ];
+
+    private static IReadOnlyList<HoldingCubukSatiri> OdemeSatirlari(HoldingAnaliz a)
+        => a.Firmalar
+            .Where(f => f.VeriVar && f.Gider > 0m)
+            .OrderByDescending(f => f.OdenmemisFatura)
+            .Select(f => new HoldingCubukSatiri(
+                f.FirmaAdi,
+                f.OdenmeOrani is { } o ? $"Ödeme oranı {HoldingBicim.Yuzde(o, 0)}" : "Ödenmemiş tutar toplanmamış",
+                [
+                    new HoldingCubukDegeri("Ödenen", f.OdenmemisBilgisiVar ? f.Gider - f.OdenmemisFatura : f.Gider, HoldingBicim.ParaKisa(f.OdenmemisBilgisiVar ? f.Gider - f.OdenmemisFatura : f.Gider), HoldingRenk.Gelir),
+                    new HoldingCubukDegeri("Ödenmemiş", f.OdenmemisFatura, HoldingBicim.ParaKisa(f.OdenmemisFatura), HoldingRenk.Uyari)
+                ],
+                HoldingRenk.Firma(f.Sira)))
+            .ToList();
 }
-

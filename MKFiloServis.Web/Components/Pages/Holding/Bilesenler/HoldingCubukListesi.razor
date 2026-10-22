@@ -1,0 +1,82 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Yatay çubuk listesi: her satırda etiket ve bir ya da birkaç çubuk (ör. gelir/gider/kâr). Tüm çubuklar ortak ölçektedir;
+   negatif değerler (zarar) sıfır çizgisinin soluna uzanır. JS gerektirmez. *@
+
+<div class="hcl" role="list">
+    @if (Satirlar.Count == 0)
+    {
+        <div class="hcl-bos">@BosMesaj</div>
+    }
+    @foreach (var s in Satirlar)
+    {
+        <div class="hcl-satir" role="listitem">
+            <div class="hcl-ust">
+                <span class="hcl-etiket" title="@s.Etiket">
+                    @if (!string.IsNullOrEmpty(s.Renk))
+                    {
+                        <i class="hcl-nokta" style="background:@(HoldingRenk.Hex(s.Renk))" aria-hidden="true"></i>
+                    }
+                    @s.Etiket
+                </span>
+                @if (!string.IsNullOrEmpty(s.AltMetin))
+                {
+                    <span class="hcl-alt">@s.AltMetin</span>
+                }
+            </div>
+            @foreach (var d in s.Degerler)
+            {
+                var konum = Konum(d.Deger);
+                <div class="hcl-cubuk" title="@s.Etiket — @d.Ad: @d.Metin">
+                    @if (s.Degerler.Count > 1)
+                    {
+                        <span class="hcl-ad">@d.Ad</span>
+                    }
+                    <span class="hcl-iz">
+                        @if (negatifVar)
+                        {
+                            <i class="hcl-sifir" style="left:@(HoldingBicim.Css(sifirKonumu))%"></i>
+                        }
+                        <span class="hcl-dolgu" style="left:@(konum.Sol)%;width:@(konum.Genislik)%;background:@(HoldingRenk.Hex(d.Renk))"></span>
+                    </span>
+                    <span class="hcl-metin">@d.Metin</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly record struct CubukKonumu(string Sol, string Genislik);
+
+    [Parameter, EditorRequired] public IReadOnlyList<HoldingCubukSatiri> Satirlar { get; set; } = Array.Empty<HoldingCubukSatiri>();
+
+    [Parameter] public string BosMesaj { get; set; } = "Gösterilecek veri yok.";
+
+    private decimal enBuyukArti;
+    private decimal enBuyukEksi;
+    private bool negatifVar;
+    private decimal sifirKonumu;
+
+    protected override void OnParametersSet()
+    {
+        var degerler = Satirlar.SelectMany(s => s.Degerler).Select(d => d.Deger).ToList();
+        enBuyukArti = degerler.Where(d => d > 0m).DefaultIfEmpty(0m).Max();
+        enBuyukEksi = degerler.Where(d => d < 0m).Select(d => -d).DefaultIfEmpty(0m).Max();
+        negatifVar = enBuyukEksi > 0m;
+        var toplam = enBuyukArti + enBuyukEksi;
+        sifirKonumu = toplam <= 0m ? 0m : enBuyukEksi / toplam * 100m;
+    }
+
+    /// <summary>Çubuğun iz üzerindeki yeri (yüzde): pozitif sıfır çizgisinden sağa, negatif sola.</summary>
+    private CubukKonumu Konum(decimal deger)
+    {
+        var toplam = enBuyukArti + enBuyukEksi;
+        if (toplam <= 0m || deger == 0m)
+            return new CubukKonumu(HoldingBicim.Css(sifirKonumu), "0");
+
+        var genislik = Math.Max(Math.Abs(deger) / toplam * 100m, 0.8m);
+        var sol = deger > 0m ? sifirKonumu : Math.Max(sifirKonumu - genislik, 0m);
+        return new CubukKonumu(HoldingBicim.Css(sol), HoldingBicim.Css(genislik));
+    }
+}

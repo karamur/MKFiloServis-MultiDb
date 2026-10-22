@@ -1,0 +1,12 @@
+﻿@* Sayfa içi bilgi notu: bir rakamın nasıl okunacağını ya da dikkat edilecek bir durumu kısaca anlatır. *@
+
+<div class="hnt @(Uyari ? "hnt-uyari" : null)" role="note">
+    <i class="bi @(Uyari ? "bi-exclamation-triangle" : "bi-info-circle") hnt-ikon" aria-hidden="true"></i>
+    <div class="hnt-metin">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter] public bool Uyari { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,28 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Önceki döneme göre değişim rozeti: renk anlama göre (yeşil iyi, kırmızı kötü), ok yönü gerçek değişimi gösterir. *@
+
+@if (Rozet.Var)
+{
+    <span class="hrz @Sinif" title="@Rozet.Ipucu">
+        @if (Rozet.Yon != HoldingRozetYonu.Ayni)
+        {
+            <i class="bi @Ok" aria-hidden="true"></i>
+            <span class="visually-hidden">@(Rozet.Yon == HoldingRozetYonu.Yukari ? "artış" : "azalış") </span>
+        }
+        @Rozet.Metin
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public HoldingRozet Rozet { get; set; } = HoldingRozet.Yok;
+
+    private string Sinif => Rozet.Iyi switch
+    {
+        true => "hrz-iyi",
+        false => "hrz-kotu",
+        _ => "hrz-notr"
+    };
+
+    private string Ok => Rozet.Yon == HoldingRozetYonu.Yukari ? "bi-arrow-up-short" : "bi-arrow-down-short";
+}

@@ -1,0 +1,13 @@
+﻿/* Veri güncelleme düğmeleri */
+
+.hvt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+}
+
+.hvt-ilerleme {
+    font-size: .78rem;
+    color: var(--crm-text-muted, #64748b);
+}

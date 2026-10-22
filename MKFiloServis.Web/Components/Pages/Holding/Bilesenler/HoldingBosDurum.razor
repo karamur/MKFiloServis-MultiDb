@@ -1,0 +1,25 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Seçilen dönemde veri yoksa gösterilen yönlendirici kart: ne olduğunu söyler, tek tıkla verinin toplanmasını sunar. *@
+
+<div class="hbd">
+    <i class="bi bi-database-exclamation hbd-ikon" aria-hidden="true"></i>
+    <h3 class="hbd-baslik">@Baslik</h3>
+    <p class="hbd-mesaj">
+        @(Mesaj ?? $"{HoldingBicim.Donem(Yil, Ay)} için henüz holding verisi toplanmamış. Veriler her ayın başında otomatik toplanır; "
+                 + "isterseniz şimdi güncelleyebilirsiniz.")
+    </p>
+    <HoldingVeriTopla Yil="Yil" Ay="Ay" Kompakt="true" OnTamamlandi="OnTamamlandi" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Yil { get; set; }
+
+    [Parameter, EditorRequired] public int Ay { get; set; }
+
+    [Parameter] public string Baslik { get; set; } = "Bu dönem için veri yok";
+
+    [Parameter] public string? Mesaj { get; set; }
+
+    [Parameter] public EventCallback OnTamamlandi { get; set; }
+}

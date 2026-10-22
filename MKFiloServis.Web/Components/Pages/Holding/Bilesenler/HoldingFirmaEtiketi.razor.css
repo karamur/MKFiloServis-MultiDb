@@ -1,0 +1,17 @@
+﻿/* Firma etiketi */
+
+.hfe {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    font-weight: 600;
+}
+
+.hfe-nokta {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: .65rem;
+    height: .65rem;
+    margin-right: .45rem;
+    border-radius: 3px;
+}

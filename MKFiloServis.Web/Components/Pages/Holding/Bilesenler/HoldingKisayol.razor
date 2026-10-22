@@ -1,0 +1,26 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Alt rapor ekranlarına kısayol kutusu: simge, başlık ve tek cümlelik açıklama. *@
+
+<a class="hky" href="@Link">
+    <span class="hky-ikon" style="color:@(Hex);background:@(Hex)22" aria-hidden="true"><i class="bi @Ikon"></i></span>
+    <span class="hky-metin">
+        <span class="hky-baslik">@Baslik</span>
+        <span class="hky-aciklama">@Aciklama</span>
+    </span>
+    <i class="bi bi-chevron-right hky-ok" aria-hidden="true"></i>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public string Baslik { get; set; } = string.Empty;
+
+    [Parameter] public string? Aciklama { get; set; }
+
+    [Parameter, EditorRequired] public string Link { get; set; } = "/holding";
+
+    [Parameter] public string Ikon { get; set; } = "bi-bar-chart";
+
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Kar;
+
+    private string Hex => HoldingRenk.Hex(Renk);
+}

@@ -1,109 +1,252 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:holding")]
 @page "/holding/karsilastirma"
 @attribute [Authorize(Roles = "Admin,HoldingYoneticisi")]
 @rendermode InteractiveServer
-@using MKFiloServis.Shared.Entities
+@inherits HoldingSayfaTabani<HoldingAnaliz>
 @using MKFiloServis.Web.Services
 @using Microsoft.AspNetCore.Authorization
-@inject IHoldingService HoldingService
-@inject ILogger<FirmaKarsilastirma> Logger
 
-<PageTitle>Firma Karsilastirma</PageTitle>
+<PageTitle>Firma Karşılaştırma</PageTitle>
 
-@if (isLoading)
-{
-    <div class="d-flex justify-content-center align-items-center" style="height: 50vh;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Yukleniyor...</span>
-        </div>
-    </div>
-}
-else
-{
-    <div class="container-fluid">
-        <h4 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Firma Karsilastirma</h4>
+<div class="container-fluid">
+    <HoldingSayfaBasligi Baslik="Firma Karşılaştırma" Ikon="bi-bar-chart"
+                         Aciklama="Firmaları gelir, gider ve kârlılıkta yan yana görün. Tüm Yıl seçilirse yıl başından bugüne toplam alınır.">
+        <Kontroller>
+            <HoldingDonemSecici Yil="Yil" Ay="Ay" VeriVarAylar="@(Veri?.VeriliAylar)" Mesgul="Yukleniyor" OnDegisti="DonemDegistiAsync" />
+            <HoldingVeriTopla Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync" />
+        </Kontroller>
+        <BilgiSatiri>
+            <HoldingDonemBilgisi Analiz="Veri" />
+        </BilgiSatiri>
+    </HoldingSayfaBasligi>
 
-        <div class="row mb-3">
-            <div class="col-auto">
-                <select class="form-select" @bind="seciliYil">
-                    @for (int y = DateTime.UtcNow.Year; y >= DateTime.UtcNow.Year - 3; y--)
-                    {
-                        <option value="@y">@y</option>
-                    }
-                </select>
-            </div>
-            <div class="col-auto">
-                <select class="form-select" @bind="seciliAy">
-                    <option value="">Tum Aylar</option>
-                    @for (int a = 1; a <= 12; a++)
-                    {
-                        <option value="@a">@(new DateTime(2024, a, 1).ToString("MMMM"))</option>
-                    }
-                </select>
-            </div>
-            <div class="col-auto">
-                <button class="btn btn-primary" @onclick="YenidenYukle">
-                    <i class="bi bi-arrow-repeat me-1"></i> Yenile
-                </button>
-            </div>
-        </div>
+    <HoldingIcerik Veri="Veri!" Yukleniyor="Yukleniyor" Hata="@Hata" OnYenile="YenidenYukleAsync" Context="a">
+        <HoldingEskiVeriNotu Analiz="a" />
 
-        @if (veriler.Count == 0)
+        @if (!a.VeriVar)
         {
-            <div class="alert alert-info">Secilen donemde veri bulunamadi.</div>
+            <HoldingBosDurum Yil="Yil" Ay="Ay" OnTamamlandi="YenidenYukleAsync" />
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Firma</th>
-                            <th class="text-end">Gelir</th>
-                            <th class="text-end">Gider</th>
-                            <th class="text-end">Kar</th>
-                            <th class="text-end">Kar Marj %</th>
-                            <th class="text-end">Hakedis</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var v in veriler.OrderByDescending(v => v.Kar))
-                        {
-                            <tr>
-                                <td>@v.FirmaAdi</td>
-                                <td class="text-end">@v.ToplamGelir.ToString("N2")</td>
-                                <td class="text-end">@v.ToplamGider.ToString("N2")</td>
-                                <td class="text-end @(v.Kar >= 0 ? "text-success" : "text-danger")">@v.Kar.ToString("N2")</td>
-                                <td class="text-end">@(v.ToplamGelir > 0 ? ((v.Kar / v.ToplamGelir) * 100).ToString("F1") + "%" : "-")</td>
-                                <td class="text-end">@(v.HakedisToplam?.ToString("N2") ?? "-")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            var t = a.Toplam;
+            var enKarli = a.Firmalar.Where(f => f.VeriVar && !f.Bos).OrderByDescending(f => f.Kar).FirstOrDefault();
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-xl">
+                    <HoldingKpiKarti Baslik="Toplam Gelir" Ikon="bi-cash-coin" Renk="@HoldingRenk.Gelir"
+                                     Deger="@HoldingBicim.ParaKisa(t.Gelir)" Ipucu="@HoldingBicim.ParaTam(t.Gelir)"
+                                     Rozet="@(a.Rozet(x => x.Gelir, true))" AltMetin="@(a.OncekiMetni(x => x.Gelir, HoldingBicim.ParaKisa))" />
+                </div>
+                <div class="col-6 col-xl">
+                    <HoldingKpiKarti Baslik="Toplam Gider" Ikon="bi-receipt" Renk="@HoldingRenk.Gider"
+                                     Deger="@HoldingBicim.ParaKisa(t.Gider)" Ipucu="@HoldingBicim.ParaTam(t.Gider)"
+                                     Rozet="@(a.Rozet(x => x.Gider, false))" AltMetin="@(a.OncekiMetni(x => x.Gider, HoldingBicim.ParaKisa))" />
+                </div>
+                <div class="col-6 col-xl">
+                    <HoldingKpiKarti Baslik="Net Kâr" Ikon="bi-graph-up-arrow" Renk="@HoldingRenk.Kar"
+                                     Deger="@HoldingBicim.ParaKisa(t.Kar)" Ipucu="@HoldingBicim.ParaTam(t.Kar)" Olumsuz="@(t.Kar < 0m)"
+                                     Rozet="@(a.Rozet(x => x.Kar, true))" AltMetin="@(a.OncekiMetni(x => x.Kar, HoldingBicim.ParaKisa))" />
+                </div>
+                <div class="col-6 col-xl">
+                    <HoldingKpiKarti Baslik="Kâr Marjı" Ikon="bi-percent" Renk="@HoldingRenk.Hakedis"
+                                     Deger="@(t.Gelir > 0m ? HoldingBicim.Yuzde(t.Marj) : "—")" Olumsuz="@(t.Gelir > 0m && t.Marj < 0m)"
+                                     Rozet="@(a.Onceki is { Gelir: > 0m } o ? HoldingRozet.Puan(t.Marj - o.Marj, true, $"{a.OncekiEtiket} ile karşılaştırma") : HoldingRozet.Yok)"
+                                     AltMetin="@(a.Onceki is { Gelir: > 0m } o2 ? $"{a.OncekiEtiket}: {HoldingBicim.Yuzde(o2.Marj)}" : null)" />
+                </div>
+                <div class="col-12 col-xl">
+                    <HoldingKpiKarti Baslik="En Kârlı Firma" Ikon="bi-trophy" Renk="@HoldingRenk.Uyari" Metin="true"
+                                     Deger="@(enKarli?.FirmaAdi ?? "—")"
+                                     AltMetin="@(enKarli != null ? $"Net kâr {HoldingBicim.ParaKisa(enKarli.Kar)}" : null)" />
+                </div>
             </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-xl-7">
+                    <HoldingKart Baslik="Gelir · Gider · Net Kâr" AltBaslik="Firma bazında, ortak ölçekte" Ikon="bi-bar-chart-steps" Renk="@HoldingRenk.Kar">
+                        <HoldingCubukListesi Satirlar="GelirGiderKar(a)" />
+                    </HoldingKart>
+                </div>
+                <div class="col-12 col-xl-5">
+                    <HoldingKart Baslik="Kâr Marjı Sıralaması" AltBaslik="Gelirin yüzde kaçı kâr kalıyor" Ikon="bi-percent" Renk="@HoldingRenk.Hakedis">
+                        <HoldingCubukListesi Satirlar="MarjSatirlari(a)" BosMesaj="Marj için gelir kaydı gerekli." />
+                        <div class="fkr-not">
+                            <i class="fkr-nokta" style="background:#10b981"></i>%@HoldingAnalizi.DusukMarj.ToString("0") ve üzeri
+                            <i class="fkr-nokta" style="background:#f97316"></i>düşük marj
+                            <i class="fkr-nokta" style="background:#ef4444"></i>zarar
+                        </div>
+                    </HoldingKart>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-xl-8">
+                    <HoldingKart Baslik="Aylık Gelir — Firma Payları" AltBaslik="@($"{a.Yil} yılı; sütun yüksekliği toplam, renkler firmalar")" Ikon="bi-bar-chart-fill" Renk="@HoldingRenk.Butce">
+                        <HoldingSutunGrafigi Kategoriler="a.Kategoriler()" Seriler="@(FirmaSerileri(a, v => v.ToplamGelir, HoldingSeriTuru.Sutun))" Yigili="true"
+                                             AriaEtiketi="Aylık gelirin firmalara göre dağılımı" />
+                    </HoldingKart>
+                </div>
+                <div class="col-12 col-xl-4">
+                    <HoldingKart Baslik="Gelir Payı" AltBaslik="@HoldingBicim.Donem(a.Yil, a.Ay)" Ikon="bi-pie-chart" Renk="@HoldingRenk.Butce">
+                        <HoldingHalkaGrafik Dilimler="GelirDilimleri(a)" MerkezDeger="@HoldingBicim.ParaKisa(t.Gelir)" MerkezAlt="Toplam gelir"
+                                            AriaEtiketi="Firmaların gelir payı" BosMesaj="Bu dönemde gelir kaydı yok." />
+                    </HoldingKart>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <HoldingKart Baslik="Aylık Net Kâr — Firma Bazında" AltBaslik="@($"{a.Yil} yılı; sıfır çizgisinin altı zarardır")" Ikon="bi-graph-up" Renk="@HoldingRenk.Gelir">
+                    <HoldingSutunGrafigi Kategoriler="a.Kategoriler()" Seriler="@(FirmaSerileri(a, v => v.Kar, HoldingSeriTuru.Cizgi))" Yukseklik="240"
+                                         AriaEtiketi="Firmaların aylık net kâr çizgileri" />
+                </HoldingKart>
+            </div>
+
+            <HoldingKart Baslik="Firma Karşılaştırma Tablosu" AltBaslik="@HoldingBicim.Donem(a.Yil, a.Ay)" Ikon="bi-table" Renk="@HoldingRenk.Notr">
+                <Eylemler>
+                    <label class="fkr-sirala">
+                        <span>Sırala</span>
+                        <select class="form-select form-select-sm" @bind="sirala" aria-label="Sıralama ölçütü">
+                            <option value="gelir">Gelir (çoktan aza)</option>
+                            <option value="gider">Gider (çoktan aza)</option>
+                            <option value="kar">Net kâr (çoktan aza)</option>
+                            <option value="marj">Kâr marjı (çoktan aza)</option>
+                            <option value="ad">Firma adı</option>
+                        </select>
+                    </label>
+                </Eylemler>
+                <ChildContent>
+                    <HoldingTablo>
+                        <thead>
+                            <tr>
+                                <th>Firma</th>
+                                <th class="sag">Gelir</th>
+                                <th class="sag">Gider</th>
+                                <th class="sag">Net Kâr</th>
+                                <th class="sag">Kâr Marjı</th>
+                                <th class="sag">Gelir Payı</th>
+                                <th class="sag">Onaylı Hakediş</th>
+                                <th class="sag">Gelir Değişimi</th>
+                                <th class="sag">Kâr Değişimi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var f in Siralanmis(a))
+                            {
+                                <tr>
+                                    <td><HoldingFirmaEtiketi Ad="@f.FirmaAdi" Sira="f.Sira" /></td>
+                                    @if (!f.VeriVar)
+                                    {
+                                        <td colspan="8" class="soluk">Bu dönem için veri toplanmamış</td>
+                                    }
+                                    else
+                                    {
+                                        <td class="sag">
+                                            <HoldingHucreCubugu Oran="@(EnBuyukGelir(a) > 0m ? f.Gelir / EnBuyukGelir(a) * 100m : 0m)" Metin="@HoldingBicim.Para(f.Gelir)"
+                                                                Renk="@HoldingRenk.Gelir" Ipucu="@HoldingBicim.ParaTam(f.Gelir)" />
+                                        </td>
+                                        <td class="sag" title="@HoldingBicim.ParaTam(f.Gider)">@HoldingBicim.Para(f.Gider)</td>
+                                        <td class="sag @(f.Kar >= 0m ? "pozitif" : "negatif")" title="@HoldingBicim.ParaTam(f.Kar)">@HoldingBicim.Para(f.Kar)</td>
+                                        <td class="sag @(f.Gelir > 0m ? (f.Marj >= 0m ? "pozitif" : "negatif") : "soluk")">@(f.Gelir > 0m ? HoldingBicim.Yuzde(f.Marj) : "—")</td>
+                                        <td class="sag">@HoldingBicim.Yuzde(f.GelirPayi)</td>
+                                        <td class="sag @(f.Hakedis == 0m ? "soluk" : null)">@HoldingBicim.Para(f.Hakedis)</td>
+                                        <td class="sag">
+                                            @if (f.Onceki is { } fo)
+                                            {
+                                                <HoldingRozetEtiketi Rozet="@(HoldingRozet.Degisim(OzetDegisim.Hesapla(f.Gelir, fo.Gelir), true, $"{a.OncekiEtiket} ile karşılaştırma"))" />
+                                            }
+                                            else
+                                            {
+                                                <span class="soluk">—</span>
+                                            }
+                                        </td>
+                                        <td class="sag">
+                                            @if (f.Onceki is { } fo2)
+                                            {
+                                                <HoldingRozetEtiketi Rozet="@(HoldingRozet.Degisim(OzetDegisim.Hesapla(f.Kar, fo2.Kar), true, $"{a.OncekiEtiket} ile karşılaştırma"))" />
+                                            }
+                                            else
+                                            {
+                                                <span class="soluk">—</span>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td>Toplam</td>
+                                <td class="sag">@HoldingBicim.Para(t.Gelir)</td>
+                                <td class="sag">@HoldingBicim.Para(t.Gider)</td>
+                                <td class="sag @(t.Kar >= 0m ? "pozitif" : "negatif")">@HoldingBicim.Para(t.Kar)</td>
+                                <td class="sag">@(t.Gelir > 0m ? HoldingBicim.Yuzde(t.Marj) : "—")</td>
+                                <td class="sag">@(t.Gelir > 0m ? "%100,0" : "—")</td>
+                                <td class="sag">@HoldingBicim.Para(t.Hakedis)</td>
+                                <td class="sag"><HoldingRozetEtiketi Rozet="@(a.Rozet(x => x.Gelir, true))" /></td>
+                                <td class="sag"><HoldingRozetEtiketi Rozet="@(a.Rozet(x => x.Kar, true))" /></td>
+                            </tr>
+                        </tfoot>
+                    </HoldingTablo>
+                </ChildContent>
+            </HoldingKart>
         }
-    </div>
-}
+    </HoldingIcerik>
+</div>
 
 @code {
-    private bool isLoading = true;
-    private List<HoldingVeri> veriler = new();
-    private int seciliYil = DateTime.UtcNow.Year;
-    private string seciliAy = "";
+    private string sirala = "gelir";
 
-    protected override async Task OnInitializedAsync() => await Yukle();
+    /// <summary>Karşılaştırma sayfası yıl başından bugüne (tüm yıl) açılır.</summary>
+    protected override bool VarsayilanTumYil => true;
 
-    private async Task Yukle()
+    protected override Task<HoldingAnaliz> VeriGetirAsync(int yil, int ay)
+        => HoldingSayfaVerisi.AnalizAsync(HoldingService, yil, ay);
+
+    private IEnumerable<HoldingFirmaOzeti> Siralanmis(HoldingAnaliz a) => sirala switch
     {
-        isLoading = true;
-        try
-        {
-            int? ay = string.IsNullOrEmpty(seciliAy) ? null : int.Parse(seciliAy);
-            veriler = await HoldingService.GetFirmaKarsilastirmaAsync(seciliYil, ay);
-        }
-        finally { isLoading = false; }
-    }
+        "gider" => a.Firmalar.OrderByDescending(f => f.Gider),
+        "kar" => a.Firmalar.OrderByDescending(f => f.Kar),
+        "marj" => a.Firmalar.OrderByDescending(f => f.Gelir > 0m ? f.Marj : decimal.MinValue),
+        "ad" => a.Firmalar.OrderBy(f => f.FirmaAdi, StringComparer.CurrentCultureIgnoreCase),
+        _ => a.Firmalar.OrderByDescending(f => f.Gelir)
+    };
 
-    private async Task YenidenYukle() => await Yukle();
+    private static decimal EnBuyukGelir(HoldingAnaliz a) => a.Firmalar.Count == 0 ? 0m : a.Firmalar.Max(f => f.Gelir);
+
+    private static IReadOnlyList<HoldingCubukSatiri> GelirGiderKar(HoldingAnaliz a)
+        => a.Firmalar
+            .Where(f => f.VeriVar)
+            .Select(f => new HoldingCubukSatiri(
+                f.FirmaAdi,
+                f.Gelir > 0m ? $"Marj {HoldingBicim.Yuzde(f.Marj)}" : null,
+                [
+                    new HoldingCubukDegeri("Gelir", f.Gelir, HoldingBicim.ParaKisa(f.Gelir), HoldingRenk.Gelir),
+                    new HoldingCubukDegeri("Gider", f.Gider, HoldingBicim.ParaKisa(f.Gider), HoldingRenk.Gider),
+                    new HoldingCubukDegeri("Net kâr", f.Kar, HoldingBicim.ParaKisa(f.Kar), HoldingRenk.Kar)
+                ],
+                HoldingRenk.Firma(f.Sira)))
+            .ToList();
+
+    private static IReadOnlyList<HoldingCubukSatiri> MarjSatirlari(HoldingAnaliz a)
+        => a.Firmalar
+            .Where(f => f.VeriVar && f.Gelir > 0m)
+            .OrderByDescending(f => f.Marj)
+            .Select(f => new HoldingCubukSatiri(
+                f.FirmaAdi,
+                $"Net kâr {HoldingBicim.ParaKisa(f.Kar)}",
+                [new HoldingCubukDegeri("Kâr marjı", f.Marj, HoldingBicim.Yuzde(f.Marj), MarjRengi(f.Marj))],
+                HoldingRenk.Firma(f.Sira)))
+            .ToList();
+
+    private static string MarjRengi(decimal marj)
+        => marj < 0m ? HoldingRenk.Gider : marj < HoldingAnalizi.DusukMarj ? HoldingRenk.Uyari : HoldingRenk.Gelir;
+
+    private static IReadOnlyList<HoldingDilim> GelirDilimleri(HoldingAnaliz a)
+        => a.Firmalar.Where(f => f.Gelir > 0m).Select(f => new HoldingDilim(f.FirmaAdi, f.Gelir, HoldingRenk.Firma(f.Sira))).ToList();
+
+    private static IReadOnlyList<HoldingSeri> FirmaSerileri(HoldingAnaliz a, Func<HoldingVeri, decimal> secici, HoldingSeriTuru tur)
+        => a.Firmalar
+            .Where(f => f.VeriVar)
+            .Select(f => new HoldingSeri(f.FirmaAdi, HoldingRenk.Firma(f.Sira), a.FirmaAylik(f.FirmaId, secici), tur))
+            .ToList();
 }
-

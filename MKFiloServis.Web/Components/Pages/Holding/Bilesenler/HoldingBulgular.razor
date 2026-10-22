@@ -1,0 +1,57 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Dikkat gerektirenler: önem sırasıyla kısa maddeler (kritik, uyarı, bilgi, iyi haber). Bağlantısı olan madde ilgili ekrana götürür. *@
+
+<div class="hbl">
+    @if (Bulgular.Count == 0)
+    {
+        <div class="hbl-tamam"><i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>@TamamMetni</div>
+    }
+    else
+    {
+        <ul class="hbl-liste @(Sutunlu ? "hbl-sutunlu" : null)">
+            @foreach (var b in Bulgular)
+            {
+                <li class="hbl-madde @Sinif(b.Onem)">
+                    <i class="bi @Ikon(b.Onem) hbl-ikon" aria-hidden="true"></i>
+                    <div class="hbl-metin">
+                        @if (!string.IsNullOrEmpty(b.Link))
+                        {
+                            <a class="hbl-baslik" href="@b.Link">@b.Baslik</a>
+                        }
+                        else
+                        {
+                            <span class="hbl-baslik">@b.Baslik</span>
+                        }
+                        <span class="hbl-aciklama">@b.Metin</span>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<HoldingBulgu> Bulgular { get; set; } = Array.Empty<HoldingBulgu>();
+
+    [Parameter] public string TamamMetni { get; set; } = "Dikkat gerektiren bir durum görünmüyor.";
+
+    /// <summary>Geniş alanda maddeleri iki sütuna dizer (dar alanda tek sütun kalır).</summary>
+    [Parameter] public bool Sutunlu { get; set; }
+
+    private static string Sinif(HoldingBulguOnemi onem) => onem switch
+    {
+        HoldingBulguOnemi.Kritik => "hbl-kritik",
+        HoldingBulguOnemi.Uyari => "hbl-uyari",
+        HoldingBulguOnemi.Iyi => "hbl-iyi",
+        _ => "hbl-bilgi"
+    };
+
+    private static string Ikon(HoldingBulguOnemi onem) => onem switch
+    {
+        HoldingBulguOnemi.Kritik => "bi-exclamation-octagon-fill",
+        HoldingBulguOnemi.Uyari => "bi-exclamation-triangle-fill",
+        HoldingBulguOnemi.Iyi => "bi-check-circle-fill",
+        _ => "bi-info-circle-fill"
+    };
+}

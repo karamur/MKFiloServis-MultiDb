@@ -1,0 +1,105 @@
+﻿@using MKFiloServis.Shared.Time
+@using MKFiloServis.Web.Services
+
+@* Dönem seçici: yıl (önceki/sonraki + liste) ve ay düğmeleri. Verisi toplanmış aylar küçük bir noktayla işaretlenir,
+   böylece yönetici hangi aylara bakabileceğini görür. Ay = 0: tüm yıl. Seçim değişince OnDegisti çağrılır. *@
+
+<div class="hds" role="group" aria-label="Dönem seçimi">
+    <div class="btn-group btn-group-sm hds-yil" role="group" aria-label="Yıl seçimi">
+        <button type="button" class="btn btn-outline-primary" title="Önceki yıl" aria-label="Önceki yıl"
+                disabled="@(Mesgul || Yil <= EnErkenYil)" @onclick="() => YilDegistirAsync(-1)">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <select class="form-select form-select-sm hds-yil-sec" aria-label="Yıl" value="@Yil" disabled="@Mesgul"
+                @onchange="YilSecildiAsync">
+            @for (var y = EnGecYil; y >= EnErkenYil; y--)
+            {
+                <option value="@y">@y</option>
+            }
+        </select>
+        <button type="button" class="btn btn-outline-primary" title="Sonraki yıl" aria-label="Sonraki yıl"
+                disabled="@(Mesgul || Yil >= EnGecYil)" @onclick="() => YilDegistirAsync(1)">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
+
+    <div class="hds-aylar" role="group" aria-label="Ay seçimi">
+        @if (TumYilVar)
+        {
+            <button type="button" class="hds-ay hds-tum @(Ay == 0 ? "hds-aktif" : null)" aria-pressed="@(Ay == 0 ? "true" : "false")"
+                    disabled="@Mesgul" @onclick="() => AySecAsync(0)">
+                Tüm Yıl
+            </button>
+        }
+        @for (var a = 1; a <= 12; a++)
+        {
+            var ay = a;
+            var gelecek = ay > SonSecilebilirAy(Yil);
+            var veriVar = VeriVarAylar?.Contains(ay) == true;
+            <button type="button"
+                    class="hds-ay @(Ay == ay ? "hds-aktif" : null) @(veriVar ? "hds-verili" : null)"
+                    title="@AyIpucu(ay, veriVar, gelecek)" aria-pressed="@(Ay == ay ? "true" : "false")"
+                    disabled="@(Mesgul || gelecek)" @onclick="() => AySecAsync(ay)">
+                @HoldingBicim.AyKisa(ay)
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Yil { get; set; }
+
+    /// <summary>1–12: ay; 0: tüm yıl.</summary>
+    [Parameter, EditorRequired] public int Ay { get; set; }
+
+    /// <summary>"Tüm Yıl" seçeneği gösterilsin mi.</summary>
+    [Parameter] public bool TumYilVar { get; set; } = true;
+
+    [Parameter] public int EnErkenYil { get; set; } = BusinessTime.Today.Year - 3;
+
+    [Parameter] public int EnGecYil { get; set; } = BusinessTime.Today.Year;
+
+    /// <summary>Seçilen yılda anlık görüntüsü olan aylar (noktayla işaretlenir).</summary>
+    [Parameter] public IReadOnlyCollection<int>? VeriVarAylar { get; set; }
+
+    /// <summary>Veri yüklenirken seçim kilitlenir.</summary>
+    [Parameter] public bool Mesgul { get; set; }
+
+    [Parameter] public EventCallback<HoldingDonemSecimi> OnDegisti { get; set; }
+
+    private static int SonSecilebilirAy(int yil)
+    {
+        var bugun = BusinessTime.Today;
+        return yil == bugun.Year ? bugun.Month : 12;
+    }
+
+    private static string AyIpucu(int ay, bool veriVar, bool gelecek)
+        => gelecek ? "Henüz başlamadı" : veriVar ? "Verisi toplanmış" : "Verisi toplanmamış";
+
+    private async Task YilDegistirAsync(int fark)
+        => await YilaGitAsync(Math.Clamp(Yil + fark, EnErkenYil, EnGecYil));
+
+    private async Task YilSecildiAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var secilen))
+            await YilaGitAsync(Math.Clamp(secilen, EnErkenYil, EnGecYil));
+    }
+
+    private async Task YilaGitAsync(int yil)
+    {
+        if (yil == Yil)
+            return;
+
+        // İçinde bulunulan yılda henüz başlamamış bir ay seçili kalmasın.
+        var ay = Ay == 0 ? 0 : Math.Min(Ay, SonSecilebilirAy(yil));
+        await OnDegisti.InvokeAsync(new HoldingDonemSecimi(yil, ay));
+    }
+
+    private async Task AySecAsync(int ay)
+    {
+        if (ay == Ay)
+            return;
+
+        await OnDegisti.InvokeAsync(new HoldingDonemSecimi(Yil, ay));
+    }
+}

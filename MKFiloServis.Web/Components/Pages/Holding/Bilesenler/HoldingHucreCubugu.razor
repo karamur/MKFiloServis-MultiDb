@@ -1,0 +1,21 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Tablo hücresi için veri çubuğu: değerin büyüklüğü metnin arkasında renkli bir çubukla görünür. *@
+
+<div class="hhc" title="@Ipucu">
+    <span class="hhc-dolgu" style="width:@(HoldingBicim.Css(Genislik))%;background:@(HoldingRenk.Hex(Renk))" aria-hidden="true"></span>
+    <span class="hhc-metin">@Metin</span>
+</div>
+
+@code {
+    /// <summary>Çubuğun doluluğu: 0–100 (üst sınır otomatik uygulanır).</summary>
+    [Parameter, EditorRequired] public decimal Oran { get; set; }
+
+    [Parameter, EditorRequired] public string Metin { get; set; } = string.Empty;
+
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Kar;
+
+    [Parameter] public string? Ipucu { get; set; }
+
+    private decimal Genislik => Math.Clamp(Oran, 0m, 100m);
+}

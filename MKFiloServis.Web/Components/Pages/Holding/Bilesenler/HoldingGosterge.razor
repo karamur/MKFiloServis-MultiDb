@@ -1,0 +1,63 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Yarım daire gösterge (JS gerektirmez): bir oranı tek bakışta gösterir. İsteğe bağlı işaret çizgisi "beklenen" düzeyi
+   (ör. bütçede geçen sürenin payı) belirtir. *@
+
+<div class="hgs">
+    <div class="hgs-kutu">
+        <svg class="hgs-svg" viewBox="0 0 120 70" role="img" aria-label="@AriaMetni">
+            <path class="hgs-zemin" d="M 10 62 A 50 50 0 0 1 110 62" fill="none" stroke-width="10" pathLength="100" />
+            @if (Dolu > 0m)
+            {
+                <path d="M 10 62 A 50 50 0 0 1 110 62" fill="none" stroke="@(HoldingRenk.Hex(Renk))" stroke-width="10" pathLength="100"
+                      stroke-dasharray="@(HoldingBicim.Css(Dolu)) 100" />
+            }
+            @if (Isaret is { } m)
+            {
+                <line class="hgs-isaret" x1="@(Nokta(m, 40).X)" y1="@(Nokta(m, 40).Y)" x2="@(Nokta(m, 61).X)" y2="@(Nokta(m, 61).Y)" stroke-width="2.4" />
+            }
+        </svg>
+        <div class="hgs-merkez">
+            <div class="hgs-deger">@DegerMetni</div>
+        </div>
+    </div>
+    @if (!string.IsNullOrEmpty(Baslik))
+    {
+        <div class="hgs-baslik">@Baslik</div>
+    }
+    @if (!string.IsNullOrEmpty(AltMetin))
+    {
+        <div class="hgs-alt">@AltMetin</div>
+    }
+</div>
+
+@code {
+    /// <summary>Gösterilecek oran (0–100); 100'ü aşan değer yay dolu çizilir, metin gerçek değeri söyler.</summary>
+    [Parameter] public decimal Yuzde { get; set; }
+
+    /// <summary>Yayın rengi: <see cref="HoldingRenk"/> belirteci.</summary>
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Gelir;
+
+    /// <summary>Yayın ortasındaki büyük metin ("%45"); veri yoksa "—".</summary>
+    [Parameter] public string? DegerMetni { get; set; }
+
+    [Parameter] public string? Baslik { get; set; }
+
+    [Parameter] public string? AltMetin { get; set; }
+
+    /// <summary>Yay üzerinde bir işaret çizgisi çizilecek yüzde (ör. beklenen kullanım); null: çizilmez.</summary>
+    [Parameter] public decimal? Isaret { get; set; }
+
+    private decimal Dolu => Math.Clamp(Yuzde, 0m, 100m);
+
+    private string AriaMetni => $"{Baslik}: {DegerMetni}";
+
+    /// <summary>Yay üzerindeki noktanın koordinatı: 0% sol uç, 100% sağ uç (merkez 60,62).</summary>
+    private static (string X, string Y) Nokta(decimal yuzde, double yaricap)
+    {
+        var aci = Math.PI * (1.0 - (double)Math.Clamp(yuzde, 0m, 100m) / 100.0);
+        var x = 60.0 + yaricap * Math.Cos(aci);
+        var y = 62.0 - yaricap * Math.Sin(aci);
+        return (HoldingBicim.Css((decimal)x), HoldingBicim.Css((decimal)y));
+    }
+}

@@ -1,0 +1,56 @@
+﻿/* Yarım daire gösterge */
+
+.hgs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.hgs-kutu {
+    position: relative;
+    width: 100%;
+    max-width: 230px;
+}
+
+.hgs-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.hgs-zemin {
+    stroke: var(--crm-border, #e2e8f0);
+}
+
+.hgs-isaret {
+    stroke: var(--crm-text, #0f172a);
+}
+
+.hgs-merkez {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 3%;
+    text-align: center;
+}
+
+.hgs-deger {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--crm-text, #0f172a);
+}
+
+.hgs-baslik {
+    margin-top: .3rem;
+    font-size: .9rem;
+    font-weight: 600;
+}
+
+.hgs-alt {
+    margin-top: .15rem;
+    font-size: .76rem;
+    line-height: 1.35;
+    color: var(--crm-text-muted, #64748b);
+}

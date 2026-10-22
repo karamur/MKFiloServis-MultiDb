@@ -1,0 +1,99 @@
+﻿/* Dikkat gerektirenler */
+
+.hbl-liste {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.hbl-sutunlu {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(21rem, 100%), 1fr));
+    gap: .4rem .6rem;
+}
+
+.hbl-madde {
+    display: flex;
+    align-items: flex-start;
+    gap: .65rem;
+    padding: .55rem .7rem;
+    border: 1px solid var(--crm-border, #e2e8f0);
+    border-left-width: 4px;
+    border-radius: 10px;
+}
+
+.hbl-kritik {
+    border-left-color: #dc2626;
+}
+
+.hbl-uyari {
+    border-left-color: #f59e0b;
+}
+
+.hbl-bilgi {
+    border-left-color: #0ea5e9;
+}
+
+.hbl-iyi {
+    border-left-color: #10b981;
+}
+
+.hbl-ikon {
+    flex: 0 0 auto;
+    margin-top: .1rem;
+    font-size: 1.05rem;
+}
+
+.hbl-kritik .hbl-ikon {
+    color: #dc2626;
+}
+
+.hbl-uyari .hbl-ikon {
+    color: #d97706;
+}
+
+.hbl-bilgi .hbl-ikon {
+    color: #0284c7;
+}
+
+.hbl-iyi .hbl-ikon {
+    color: #059669;
+}
+
+.hbl-metin {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.3;
+}
+
+.hbl-baslik {
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--crm-text, #0f172a);
+    text-decoration: none;
+}
+
+a.hbl-baslik:hover {
+    text-decoration: underline;
+}
+
+.hbl-aciklama {
+    font-size: .8rem;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hbl-tamam {
+    display: flex;
+    align-items: center;
+    padding: .6rem .2rem;
+    font-weight: 600;
+    color: #047857;
+}
+
+[data-theme="dark"] .hbl-tamam {
+    color: #34d399;
+}

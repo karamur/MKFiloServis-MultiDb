@@ -1,0 +1,87 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Mini eğilim çizgisi (JS gerektirmez): 12 aylık değerleri tek bakışta gösterir. Değeri olmayan (null) ay çizgiyi böler. *@
+
+@{
+    var hex = HoldingRenk.Hex(Renk);
+}
+
+<svg class="spk" viewBox="0 0 100 @Yukseklik" preserveAspectRatio="none" aria-hidden="true">
+    @if (parcalar.Count == 0)
+    {
+        <line x1="0" y1="@HoldingBicim.Css(Yukseklik - 4)" x2="100" y2="@HoldingBicim.Css(Yukseklik - 4)"
+              stroke="@hex" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" />
+    }
+    else
+    {
+        foreach (var parca in parcalar)
+        {
+            if (parca.Count > 1)
+            {
+                <path d="@AlanYolu(parca)" fill="@hex" fill-opacity=".14" stroke="none" />
+                <polyline points="@Noktalar(parca)" fill="none" stroke="@hex" stroke-width="1.8" stroke-linejoin="round"
+                          stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            }
+        }
+    }
+</svg>
+
+@code {
+    /// <summary>Sıralı değerler (ay sırasıyla); null: o noktada veri yok.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<decimal?> Degerler { get; set; } = Array.Empty<decimal?>();
+
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Kar;
+
+    [Parameter] public int Yukseklik { get; set; } = 30;
+
+    private List<List<(decimal X, decimal Y)>> parcalar = new();
+
+    protected override void OnParametersSet()
+    {
+        parcalar = new List<List<(decimal X, decimal Y)>>();
+        var n = Degerler.Count;
+        var dolu = Degerler.Where(d => d.HasValue).Select(d => d!.Value).ToList();
+        if (n < 2 || dolu.Count < 2)
+            return;
+
+        var enKucuk = dolu.Min();
+        var enBuyuk = dolu.Max();
+        var aralik = enBuyuk - enKucuk;
+        const decimal bosluk = 3m;
+        var yuk = (decimal)Yukseklik;
+
+        var akim = new List<(decimal X, decimal Y)>();
+        for (var i = 0; i < n; i++)
+        {
+            if (Degerler[i] is not { } d)
+            {
+                if (akim.Count > 0)
+                    parcalar.Add(akim);
+                akim = new List<(decimal X, decimal Y)>();
+                continue;
+            }
+
+            var x = i / (decimal)(n - 1) * 100m;
+            var y = aralik == 0m ? yuk / 2m : yuk - bosluk - (d - enKucuk) / aralik * (yuk - 2m * bosluk);
+            akim.Add((x, y));
+        }
+
+        if (akim.Count > 0)
+            parcalar.Add(akim);
+
+        if (parcalar.All(p => p.Count < 2))
+            parcalar.Clear();
+    }
+
+    private static string Noktalar(List<(decimal X, decimal Y)> parca)
+        => string.Join(' ', parca.Select(p => $"{HoldingBicim.Css(p.X)},{HoldingBicim.Css(p.Y)}"));
+
+    private string AlanYolu(List<(decimal X, decimal Y)> parca)
+    {
+        var taban = HoldingBicim.Css(Yukseklik);
+        var yol = $"M {HoldingBicim.Css(parca[0].X)},{taban} " +
+                  string.Join(' ', parca.Select(p => $"L {HoldingBicim.Css(p.X)},{HoldingBicim.Css(p.Y)}")) +
+                  $" L {HoldingBicim.Css(parca[^1].X)},{taban} Z";
+        return yol;
+    }
+}

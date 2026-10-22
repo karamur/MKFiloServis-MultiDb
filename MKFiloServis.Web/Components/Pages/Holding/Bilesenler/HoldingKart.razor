@@ -1,0 +1,44 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Holding ekranlarının ortak kart kabuğu: simge + başlık + alt başlık, sağ üstte eylemler, altında gövde. *@
+
+<section class="hk @Sinif" aria-label="@Baslik">
+    <header class="hk-ust">
+        @if (!string.IsNullOrEmpty(Ikon))
+        {
+            <span class="hk-ikon" style="color:@(Hex);background:@(Hex)22" aria-hidden="true"><i class="bi @Ikon"></i></span>
+        }
+        <div class="hk-baslik-kutu">
+            <h3 class="hk-baslik">@Baslik</h3>
+            @if (!string.IsNullOrEmpty(AltBaslik))
+            {
+                <div class="hk-alt">@AltBaslik</div>
+            }
+        </div>
+        @if (Eylemler != null)
+        {
+            <div class="hk-eylemler">@Eylemler</div>
+        }
+    </header>
+    <div class="hk-govde">@ChildContent</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Baslik { get; set; } = string.Empty;
+
+    [Parameter] public string? AltBaslik { get; set; }
+
+    /// <summary>Bootstrap Icons sınıfı (ör. "bi-bar-chart-line").</summary>
+    [Parameter] public string? Ikon { get; set; }
+
+    /// <summary>Simge rengi: <see cref="HoldingRenk"/> belirteci.</summary>
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Kar;
+
+    [Parameter] public string? Sinif { get; set; }
+
+    [Parameter] public RenderFragment? Eylemler { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Hex => HoldingRenk.Hex(Renk);
+}

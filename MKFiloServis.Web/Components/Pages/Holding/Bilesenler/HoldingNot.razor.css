@@ -1,0 +1,34 @@
+﻿/* Bilgi notu */
+
+.hnt {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    margin-bottom: 1rem;
+    padding: .6rem .85rem;
+    border: 1px dashed var(--crm-border, #cbd5e1);
+    border-radius: 10px;
+    font-size: .85rem;
+    line-height: 1.4;
+    color: var(--crm-text-muted, #64748b);
+}
+
+.hnt-ikon {
+    flex: 0 0 auto;
+    margin-top: .1rem;
+}
+
+.hnt-metin {
+    min-width: 0;
+}
+
+.hnt-uyari {
+    border-style: solid;
+    border-color: rgba(245, 158, 11, .5);
+    background: rgba(245, 158, 11, .08);
+    color: var(--crm-text, #0f172a);
+}
+
+.hnt-uyari .hnt-ikon {
+    color: #d97706;
+}

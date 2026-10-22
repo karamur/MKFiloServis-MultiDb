@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Services.Interfaces;
@@ -19,9 +19,17 @@ namespace MKFiloServis.Web.Services;
 /// <see cref="ToplaVeKaydetAsync"/> metodu periyodik olarak (Quartz job veya manuel)
 /// çağrılarak güncel verileri toplar.
 /// </para>
+/// <para>
+/// Toplama tüm aktif firmaları kapsar: kullanıcının üst menüden seçtiği aktif firma (firma/tenant filtresi) toplamayı
+/// kısıtlamaz. Yoksa yalnız seçili firma dolu, diğerleri 0 çıkardı; oturumsuz çalışan aylık Quartz işi ise hiçbir firmayı
+/// göremezdi. Yazılımsal silme filtresi korunur.
+/// </para>
 /// </remarks>
 public sealed class HoldingService : IHoldingService
 {
+    /// <summary><see cref="ApplicationDbContext"/> içindeki firma (tenant) filtresinin adı.</summary>
+    private const string TenantFiltresi = "Tenant";
+
     private readonly IDbContextFactory<ApplicationDbContext> _appFactory;
     private readonly ILogger<HoldingService> _logger;
 
@@ -32,6 +40,10 @@ public sealed class HoldingService : IHoldingService
         _appFactory = appFactory;
         _logger = logger;
     }
+
+    /// <summary>Aktif firma seçiminden bağımsız okuma: yalnız firma (tenant) filtresi kapatılır.</summary>
+    private static IQueryable<T> FirmaFiltresiz<T>(IQueryable<T> kaynak) where T : class
+        => kaynak.IgnoreQueryFilters([TenantFiltresi]);
 
     /// <summary>
     /// Tüm aktif firmalar için belirtilen döneme ait konsolide verileri toplar
@@ -62,74 +74,11 @@ public sealed class HoldingService : IHoldingService
         var end = start.AddMonths(1);
 
         // Her firma için kendi DbContext'i ile paralel sorgu (DbContext thread-safe değil)
-        var tasks = firmalar.Select(async firma =>
-        {
-            try
-            {
-                using var firmaCtx = await _appFactory.CreateDbContextAsync();
-                var firmaId = firma.Id;
+        var results = await Task.WhenAll(firmalar.Select(firma => FirmaKarZararAsync(firma, yil, ay, start, end)));
 
-                var gelir = await firmaCtx.Faturalar
-                    .Where(f => !f.IsDeleted && f.FirmaId == firmaId
-                        && f.FaturaTipi == FaturaTipi.SatisFaturasi
-                        && f.FaturaTarihi >= start && f.FaturaTarihi < end)
-                    .SumAsync(f => f.GenelToplam);
-
-                var gider = await firmaCtx.Faturalar
-                    .Where(f => !f.IsDeleted && f.FirmaId == firmaId
-                        && f.FaturaTipi == FaturaTipi.AlisFaturasi
-                        && f.FaturaTarihi >= start && f.FaturaTarihi < end)
-                    .SumAsync(f => f.GenelToplam);
-
-                // Kural 4: AracMasraf ve PersonelMaas artik dogrudan FirmaId'ye sahip
-                var aracMaliyet = await firmaCtx.AracMasraflari
-                    .Where(m => !m.IsDeleted && m.FirmaId == firmaId
-                        && m.CreatedAt >= start && m.CreatedAt < end)
-                    .SumAsync(m => m.Tutar);
-
-                var personelMaliyet = await firmaCtx.PersonelMaaslari
-                    .Where(p => !p.IsDeleted && p.FirmaId == firmaId
-                        && p.CreatedAt >= start && p.CreatedAt < end)
-                    .SumAsync(p => p.NetMaas);
-
-                var hakedisToplam = await firmaCtx.Hakedisler
-                    .Where(h => !h.IsDeleted && h.FirmaId == firmaId
-                        && h.CreatedAt >= start && h.CreatedAt < end)
-                    .SumAsync(h => h.GenelToplam);
-
-                var aktifAracSayisi = await firmaCtx.Araclar
-                    .CountAsync(a => !a.IsDeleted && a.Aktif && a.FirmaId == firmaId);
-
-                var personelSayisi = await firmaCtx.Soforler
-                    .CountAsync(s => !s.IsDeleted && s.Aktif && s.FirmaId == firmaId);
-
-                return new HoldingVeri
-                {
-                    FirmaId = firma.Id,
-                    FirmaKodu = firma.FirmaKodu,
-                    FirmaAdi = firma.FirmaAdi,
-                    Yil = yil,
-                    Ay = ay,
-                    Kategori = "KARZARAR",
-                    ToplamGelir = gelir,
-                    ToplamGider = gider,
-                    Kar = gelir - gider,
-                    AraclarMaliyet = aracMaliyet,
-                    PersonelMaliyet = personelMaliyet,
-                    HakedisToplam = hakedisToplam,
-                    AktifAracSayisi = aktifAracSayisi,
-                    PersonelSayisi = personelSayisi,
-                    OlusturmaTarihi = DateTime.UtcNow,
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Firma {FirmaId} ({FirmaAdi}) veri toplama hatasi.", firma.Id, firma.FirmaAdi);
-                return null;
-            }
-        });
-
-        var results = await Task.WhenAll(tasks);
+        // Tek tek firma hataları günlüğe yazılıp atlanır; ama hiçbir firma toplanamadıysa ekran "güncellendi" demesin.
+        if (results.All(v => v == null))
+            throw new InvalidOperationException($"{yil}-{ay:D2} dönemi için hiçbir firmanın verisi toplanamadı (ayrıntı uygulama günlüğünde).");
 
         // Upsert — ayrı bir context ile toplu yazma
         using var writeCtx = await _appFactory.CreateDbContextAsync();
@@ -142,14 +91,18 @@ public sealed class HoldingService : IHoldingService
 
             if (existing != null)
             {
+                existing.FirmaKodu = veri.FirmaKodu;
+                existing.FirmaAdi = veri.FirmaAdi;
                 existing.ToplamGelir = veri.ToplamGelir;
                 existing.ToplamGider = veri.ToplamGider;
                 existing.Kar = veri.Kar;
                 existing.AraclarMaliyet = veri.AraclarMaliyet;
                 existing.PersonelMaliyet = veri.PersonelMaliyet;
                 existing.HakedisToplam = veri.HakedisToplam;
+                existing.OdenmemisFaturaToplam = veri.OdenmemisFaturaToplam;
                 existing.AktifAracSayisi = veri.AktifAracSayisi;
                 existing.PersonelSayisi = veri.PersonelSayisi;
+                existing.JsonDetay = veri.JsonDetay;
                 existing.OlusturmaTarihi = DateTime.UtcNow;
             }
             else
@@ -167,9 +120,101 @@ public sealed class HoldingService : IHoldingService
     }
 
     /// <summary>
+    /// Bir firmanın dönem kâr/zarar rakamları. Tutar toplamları dar projeksiyonla çekilip bellekte toplanır
+    /// (decimal toplamı SQLite'ta çevrilemez; PostgreSQL'de de yük önemsizdir).
+    /// </summary>
+    private async Task<HoldingVeri?> FirmaKarZararAsync(Firma firma, int yil, int ay, DateTime start, DateTime end)
+    {
+        try
+        {
+            using var firmaCtx = await _appFactory.CreateDbContextAsync();
+            var firmaId = firma.Id;
+
+            // Gelir/gider: iptal edilen faturalar sayılmaz. Ödenmemiş tutar yalnız alış faturalarının kalanıdır.
+            var faturalar = await FirmaFiltresiz(firmaCtx.Faturalar).AsNoTracking()
+                .Where(f => !f.IsDeleted && f.FirmaId == firmaId
+                    && f.Durum != FaturaDurum.IptalEdildi
+                    && (f.FaturaTipi == FaturaTipi.SatisFaturasi || f.FaturaTipi == FaturaTipi.AlisFaturasi)
+                    && f.FaturaTarihi >= start && f.FaturaTarihi < end)
+                .Select(f => new { f.FaturaTipi, f.Durum, f.GenelToplam, f.OdenenTutar })
+                .ToListAsync();
+
+            var gelir = faturalar.Where(f => f.FaturaTipi == FaturaTipi.SatisFaturasi).Sum(f => f.GenelToplam);
+            var alislar = faturalar.Where(f => f.FaturaTipi == FaturaTipi.AlisFaturasi).ToList();
+            var gider = alislar.Sum(f => f.GenelToplam);
+            var odenmemis = alislar
+                .Where(f => f.Durum != FaturaDurum.Odendi)
+                .Sum(f => Math.Max(0m, f.GenelToplam - f.OdenenTutar));
+
+            // Araç masrafı masraf tarihine, maaş ve hakediş kendi dönem (yıl/ay) alanına göre aylandırılır;
+            // kayıt (CreatedAt) tarihi geç girilen kayıtları yanlış aya atardı.
+            var aracMaliyet = (await FirmaFiltresiz(firmaCtx.AracMasraflari).AsNoTracking()
+                    .Where(m => !m.IsDeleted && m.FirmaId == firmaId && m.MasrafTarihi >= start && m.MasrafTarihi < end)
+                    .Select(m => m.Tutar)
+                    .ToListAsync())
+                .Sum();
+
+            var personelMaliyet = (await FirmaFiltresiz(firmaCtx.PersonelMaaslari).AsNoTracking()
+                    .Where(p => !p.IsDeleted && p.FirmaId == firmaId && p.Yil == yil && p.Ay == ay)
+                    .Select(p => p.NetMaas)
+                    .ToListAsync())
+                .Sum();
+
+            // Hakediş: kuruma kesilen (gelir) ve dışarıya ödenen (gider) onaylı hakedişler ayrı tutulur; yalnız tutarı kesinleşmiş
+            // durumlar (onaylı, faturalı, tahsil edilmiş, ödenmiş) sayılır — taslaklar birbiriyle çakışabilir, iptaller geçersizdir.
+            // Araç bazlı iç raporlar (faturalanmaz) hiç sayılmaz.
+            var hakedisler = await FirmaFiltresiz(firmaCtx.Hakedisler).AsNoTracking()
+                .Where(h => !h.IsDeleted && h.FirmaId == firmaId && h.Yil == yil && h.Ay == ay
+                    && (h.Durum == HakedisDurum.Onaylandi || h.Durum == HakedisDurum.Faturalandi
+                        || h.Durum == HakedisDurum.TahsilEdildi || h.Durum == HakedisDurum.Odendi))
+                .Select(h => new { h.Tip, h.GenelToplam })
+                .ToListAsync();
+            var hakedisGelir = hakedisler.Where(h => h.Tip.GelirMi()).Sum(h => h.GenelToplam);
+            var hakedisGider = hakedisler.Where(h => h.Tip.GiderMi()).Sum(h => h.GenelToplam);
+
+            var aktifAracSayisi = await FirmaFiltresiz(firmaCtx.Araclar)
+                .CountAsync(a => !a.IsDeleted && a.Aktif && a.FirmaId == firmaId);
+
+            var personelSayisi = await FirmaFiltresiz(firmaCtx.Soforler)
+                .CountAsync(s => !s.IsDeleted && s.Aktif && s.FirmaId == firmaId);
+
+            return new HoldingVeri
+            {
+                FirmaId = firma.Id,
+                FirmaKodu = firma.FirmaKodu,
+                FirmaAdi = firma.FirmaAdi,
+                Yil = yil,
+                Ay = ay,
+                Kategori = "KARZARAR",
+                ToplamGelir = gelir,
+                ToplamGider = gider,
+                Kar = gelir - gider,
+                AraclarMaliyet = aracMaliyet,
+                PersonelMaliyet = personelMaliyet,
+                HakedisToplam = hakedisGelir,
+                OdenmemisFaturaToplam = odenmemis,
+                AktifAracSayisi = aktifAracSayisi,
+                PersonelSayisi = personelSayisi,
+                JsonDetay = HoldingDetay.Yaz(new HoldingDetay { HakedisGider = hakedisGider }),
+                OlusturmaTarihi = DateTime.UtcNow,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Firma {FirmaId} ({FirmaAdi}) veri toplama hatasi.", firma.Id, firma.FirmaAdi);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Tüm aktif firmalar için bütçe hedef ve gerçekleşen verilerini toplar
     /// ve <see cref="HoldingVeri"/> tablosuna Kategori="BUTCE" olarak upsert eder.
     /// </summary>
+    /// <remarks>
+    /// Tanımlar Bütçe modülüyle aynıdır (<c>BudgetService.GetYillikHedefOzetAsync</c>): yıllık hedef "Ay = 0" kayıtlarıdır
+    /// (yoksa aylık hedeflerin toplamı), gerçekleşen "ödendi ya da faturayla kapatıldı" ödemelerin ödenen tutarıdır.
+    /// Firması boş (ortak) bütçe kayıtları firma anlık görüntüsüne yazılamadığından bu özete girmez.
+    /// </remarks>
     private async Task ToplaButceVeKaydetAsync(List<Firma> firmalar, int yil, int ay)
     {
         _logger.LogInformation("ToplaButce: {Count} firma icin {Yil}-{Ay} BUTCE verisi toplaniyor...",
@@ -182,24 +227,25 @@ public sealed class HoldingService : IHoldingService
                 using var firmaCtx = await _appFactory.CreateDbContextAsync();
                 var firmaId = firma.Id;
 
-                // BudgetHedef: Bu firma için yılın tüm aylarındaki hedef toplamı
-                var butceHedef = await firmaCtx.BudgetHedefler
+                var hedefler = await firmaCtx.BudgetHedefler.AsNoTracking()
                     .Where(h => !h.IsDeleted && h.FirmaId == firmaId && h.Yil == yil)
-                    .SumAsync(h => h.HedefTutar);
+                    .Select(h => new { h.Ay, h.HedefTutar })
+                    .ToListAsync();
+                var yillikHedef = hedefler.Where(h => h.Ay == 0).Sum(h => h.HedefTutar);
+                var aylikHedefToplami = hedefler.Where(h => h.Ay is >= 1 and <= 12).Sum(h => h.HedefTutar);
+                var butceHedef = yillikHedef > 0m ? yillikHedef : aylikHedefToplami;
 
-                // BudgetOdeme: Bu firma için ilgili aydaki gerçekleşen ödemeler
-                var butceGerceklesen = await firmaCtx.BudgetOdemeler
-                    .Where(o => !o.IsDeleted && o.FirmaId == firmaId
-                        && o.OdemeYil == yil && o.OdemeAy == ay
-                        && o.Durum == OdemeDurum.Odendi)
-                    .SumAsync(o => o.Miktar);
-
-                // Yıllık kümülatif gerçekleşen (Ocak'tan bu aya kadar)
-                var yillikGerceklesen = await firmaCtx.BudgetOdemeler
+                // Yıl başından bu aya kadar gerçekleşen ödemeler (ay bazında ayrıştırılabilsin diye tek sorgu).
+                var odemeler = await firmaCtx.BudgetOdemeler.AsNoTracking()
                     .Where(o => !o.IsDeleted && o.FirmaId == firmaId
                         && o.OdemeYil == yil && o.OdemeAy <= ay
-                        && o.Durum == OdemeDurum.Odendi)
-                    .SumAsync(o => o.Miktar);
+                        && (o.Durum == OdemeDurum.Odendi || o.FaturaIleKapatildi))
+                    .Select(o => new { o.OdemeAy, o.OdenenTutar, o.Miktar })
+                    .ToListAsync();
+
+                var butceGerceklesen = odemeler.Where(o => o.OdemeAy == ay).Sum(o => o.OdenenTutar ?? o.Miktar);
+                // Yıllık kümülatif gerçekleşen (Ocak'tan bu aya kadar)
+                var yillikGerceklesen = odemeler.Sum(o => o.OdenenTutar ?? o.Miktar);
 
                 return new HoldingVeri
                 {
@@ -234,6 +280,8 @@ public sealed class HoldingService : IHoldingService
 
             if (existing != null)
             {
+                existing.FirmaKodu = veri.FirmaKodu;
+                existing.FirmaAdi = veri.FirmaAdi;
                 existing.ButceHedef = veri.ButceHedef;
                 existing.ButceGerceklesen = veri.ButceGerceklesen;
                 existing.ToplamGelir = veri.ToplamGelir;
@@ -314,7 +362,49 @@ public sealed class HoldingService : IHoldingService
         await ctx.SaveChangesAsync();
         return rapor;
     }
+
+    public async Task<HoldingDonemSecimi?> GetSonVeriDonemiAsync()
+    {
+        using var ctx = await _appFactory.CreateDbContextAsync();
+        var son = await ctx.HoldingVeriler.AsNoTracking()
+            .Where(v => v.Kategori == "KARZARAR")
+            .OrderByDescending(v => v.Yil).ThenByDescending(v => v.Ay)
+            .Select(v => new { v.Yil, v.Ay })
+            .FirstOrDefaultAsync();
+
+        return son == null ? null : new HoldingDonemSecimi(son.Yil, son.Ay);
+    }
+
+    public async Task<List<HoldingVadeKalemi>> GetAcikFaturalarAsync()
+    {
+        using var ctx = await _appFactory.CreateDbContextAsync();
+
+        var firmalar = await ctx.Firmalar.AsNoTracking()
+            .Where(f => f.Aktif && !f.IsDeleted)
+            .Select(f => new { f.Id, f.FirmaAdi })
+            .ToListAsync();
+        if (firmalar.Count == 0)
+            return [];
+
+        var adlar = firmalar.ToDictionary(f => f.Id, f => f.FirmaAdi);
+        var idler = adlar.Keys.ToList();
+
+        // Tam ödenmiş ve iptal faturalar sunucuda elenir; kalan tutar kontrolü (eski tutarsız kayıtlar için) bellekte yapılır.
+        var ham = await FirmaFiltresiz(ctx.Faturalar).AsNoTracking()
+            .Where(f => !f.IsDeleted && f.FirmaId != null && idler.Contains(f.FirmaId.Value)
+                && f.Durum != FaturaDurum.IptalEdildi && f.Durum != FaturaDurum.Odendi
+                && (f.FaturaTipi == FaturaTipi.SatisFaturasi || f.FaturaTipi == FaturaTipi.AlisFaturasi))
+            .Select(f => new { FirmaId = f.FirmaId!.Value, f.FaturaTipi, f.VadeTarihi, f.GenelToplam, f.OdenenTutar })
+            .ToListAsync();
+
+        return ham
+            .Select(f => new HoldingVadeKalemi(
+                f.FirmaId,
+                adlar[f.FirmaId],
+                f.FaturaTipi == FaturaTipi.AlisFaturasi,
+                f.VadeTarihi,
+                f.GenelToplam - f.OdenenTutar))
+            .Where(k => k.Kalan > 0m)
+            .ToList();
+    }
 }
-
-
-

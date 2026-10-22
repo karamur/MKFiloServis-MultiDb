@@ -1,0 +1,11 @@
+﻿/* İçerik kabuğu */
+
+.hic-yenileniyor {
+    opacity: .55;
+    pointer-events: none;
+    transition: opacity .15s;
+}
+
+.hic-iskelet-grafik {
+    height: 12rem;
+}

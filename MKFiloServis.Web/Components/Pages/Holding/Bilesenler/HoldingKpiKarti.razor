@@ -1,0 +1,59 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Büyük rakam kartı: değer, önceki döneme göre değişim rozeti ve (varsa) 12 aylık mini eğilim çizgisi. *@
+
+<div class="kpi @(Kucuk ? "kpi-kucuk" : null)">
+    <div class="kpi-ust">
+        <span class="kpi-ikon" style="color:@(Hex);background:@(Hex)22" aria-hidden="true"><i class="bi @Ikon"></i></span>
+        <span class="kpi-baslik">@Baslik</span>
+    </div>
+    <div class="kpi-deger @DegerSinifi @(Metin ? "kpi-metin" : null)" title="@Ipucu">@Deger</div>
+    <div class="kpi-alt">
+        <HoldingRozetEtiketi Rozet="Rozet" />
+        @if (!string.IsNullOrEmpty(AltMetin))
+        {
+            <span class="kpi-alt-metin">@AltMetin</span>
+        }
+    </div>
+    @if (Seri is { Count: > 1 })
+    {
+        <div class="kpi-seri"><HoldingSparkline Degerler="Seri" Renk="@Renk" /></div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Baslik { get; set; } = string.Empty;
+
+    /// <summary>Hazır biçimli değer ("13,17 Mn TL", "%43,3", "37").</summary>
+    [Parameter, EditorRequired] public string Deger { get; set; } = string.Empty;
+
+    /// <summary>Bootstrap Icons sınıfı.</summary>
+    [Parameter] public string Ikon { get; set; } = "bi-graph-up";
+
+    /// <summary><see cref="HoldingRenk"/> belirteci.</summary>
+    [Parameter] public string Renk { get; set; } = HoldingRenk.Kar;
+
+    [Parameter] public HoldingRozet Rozet { get; set; } = HoldingRozet.Yok;
+
+    /// <summary>Rozetin yanındaki açıklama ("Mart 2026: 11,7 Mn TL").</summary>
+    [Parameter] public string? AltMetin { get; set; }
+
+    /// <summary>Fare ipucu: tam tutar.</summary>
+    [Parameter] public string? Ipucu { get; set; }
+
+    /// <summary>12 aylık eğilim; verilmezse çizgi çizilmez.</summary>
+    [Parameter] public IReadOnlyList<decimal?>? Seri { get; set; }
+
+    /// <summary>Küçük kart: daha ufak rakam, eğilim çizgisi yok.</summary>
+    [Parameter] public bool Kucuk { get; set; }
+
+    /// <summary>Değer olumsuzsa (zarar) kırmızı yazılır.</summary>
+    [Parameter] public bool Olumsuz { get; set; }
+
+    /// <summary>Değer sayı değil metindir (ör. firma adı): daha küçük puntoyla yazılır.</summary>
+    [Parameter] public bool Metin { get; set; }
+
+    private string Hex => HoldingRenk.Hex(Renk);
+
+    private string? DegerSinifi => Olumsuz ? "kpi-olumsuz" : null;
+}

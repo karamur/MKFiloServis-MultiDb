@@ -1,0 +1,28 @@
+﻿@using MKFiloServis.Web.Services
+
+@* Sayfa başlığının altındaki bilgi satırı: dönem, firma sayısı, verinin ne zaman toplandığı ve karşılaştırılan dönem. *@
+
+@if (Analiz != null)
+{
+    <span class="hdo-donem">@HoldingBicim.Donem(Analiz.Yil, Analiz.Ay)</span>
+    @if (Analiz.VeriVar)
+    {
+        <span> · @Analiz.Toplam.FirmaSayisi firma</span>
+    }
+    @if (Analiz.SonGuncellemeUtc is { } zaman)
+    {
+        <span> · veriler @HoldingBicim.Zaman(zaman) tarihinde toplandı</span>
+    }
+    else
+    {
+        <span> · bu dönem için veri toplanmamış</span>
+    }
+    @if (Analiz.Onceki != null)
+    {
+        <span> · karşılaştırma: @Analiz.OncekiEtiket</span>
+    }
+}
+
+@code {
+    [Parameter] public HoldingAnaliz? Analiz { get; set; }
+}
