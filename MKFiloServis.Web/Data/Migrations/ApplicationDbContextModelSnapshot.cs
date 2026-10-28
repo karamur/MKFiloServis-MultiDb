@@ -8376,6 +8376,9 @@ namespace MKFiloServis.Web.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<int>("FirmaId")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("GelenFaturaId")
                         .HasColumnType("integer");
 

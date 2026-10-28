@@ -3,8 +3,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MKFiloServis.Shared.Entities;
 
-public class KiralikPlakaTakip : BaseEntity
+public class KiralikPlakaTakip : BaseEntity, IFirmaTenant
 {
+    /// <summary>Bu plaka takip kaydının ait olduğu firma.</summary>
+    public int? FirmaId { get; set; }
+
     public int? AracId { get; set; }
     public virtual Arac? Arac { get; set; }
     public virtual ICollection<KiralikPlakaTakipFatura> FaturaDetaylari { get; set; } = new List<KiralikPlakaTakipFatura>();
