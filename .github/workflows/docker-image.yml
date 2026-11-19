@@ -87,7 +87,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=MKFiloServis.Web
             org.opencontainers.image.description=MK Filo Servis - Blazor Server (.NET 10)
-            org.opencontainers.image.vendor=Allbatros Global Teknoloji
+            org.opencontainers.image.vendor=Gelistirici Bilisim
             org.opencontainers.image.licenses=Proprietary
 
       - name: 🔨 Build & Push

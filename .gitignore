@@ -151,3 +151,5 @@ diagnostic-test-output*.txt
 
 # Local authenticated sessions must never be delivered in the repository
 MKFiloServis.Web/cookies.txt
+
+.fake

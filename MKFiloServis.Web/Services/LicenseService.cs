@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -34,6 +34,7 @@ public class LicenseService
     private readonly LicenseCache _cache; // Singleton cache — request'ler arası yaşar
     private readonly DatabaseRuntimeInfo _databaseRuntime;
     private readonly IDataProtector _demoProtector;
+    private readonly IWebHostEnvironment _env;
     // Public verification key only. The private signing key is kept outside the repository and installers.
     private const string PublicKeyPem = MKFiloServis.Shared.Licensing.LicenseSigningPublicKey.Pem;
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
@@ -41,7 +42,7 @@ public class LicenseService
     private const int DemoMaxDays = 15;
     private const int DemoButtonDays = 15;
 
-    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache, DatabaseRuntimeInfo databaseRuntime, IDataProtectionProvider dataProtection)
+    public LicenseService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration config, ILogger<LicenseService> logger, LicenseCache cache, DatabaseRuntimeInfo databaseRuntime, IDataProtectionProvider dataProtection, IWebHostEnvironment env)
     {
         _dbFactory = dbFactory;
         _config = config;
@@ -49,6 +50,7 @@ public class LicenseService
         _cache = cache;
         _databaseRuntime = databaseRuntime;
         _demoProtector = dataProtection.CreateProtector("MKFiloServis.License.Demo.v1");
+        _env = env;
     }
 
     // ══════════════════════════════════════════════
@@ -294,6 +296,13 @@ public class LicenseService
 
     public async Task<LicenseValidationResult> ValidateAsync(bool persistValidation = true)
     {
+        // Development ortamında lisans dogrulamasini (DB sorgusu + 10 katmanli kontrol) atla.
+        if (_env.IsDevelopment())
+        {
+            var mockLicense = await GetCurrentLicenseAsync();
+            return LicenseValidationResult.Ok(mockLicense!);
+        }
+
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -939,6 +948,28 @@ public class LicenseService
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync()
     {
+        // Development ortamında mock lisans döndür
+        if (_env.IsDevelopment())
+        {
+            var mockLicense = new LicenseInfo
+            {
+                Id = 1,
+                FirmaKodu = "DEV",
+                MachineId = GetMachineId(),
+                ExpireDate = DateTime.UtcNow.AddYears(10),
+                CreatedAt = DateTime.UtcNow.AddDays(-1),
+                IsActive = true,
+                IsDeleted = false,
+                IsDemo = false,
+                AllowedVersion = "10.0.0",
+                Signature = "mock_dev_signature",
+                LastValidatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _cache.Set(mockLicense);
+            return mockLicense;
+        }
+
         // Singleton cache varsa tekrar DB'ye gitme
         var cached = _cache.Get();
         if (cached != null)
@@ -1012,6 +1043,10 @@ public class LicenseService
 
     public bool HasModulePermission(string moduleName)
     {
+        // Development ortamında tüm modüller açık
+        if (_env.IsDevelopment())
+            return true;
+
         var lic = _cache.GetValidated();
         if (lic == null || !lic.IsActive || lic.IsDeleted || !VerifySignature(lic)) return false;
         var now = DateTime.UtcNow;

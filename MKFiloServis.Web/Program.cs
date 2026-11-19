@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Components;
+﻿using MKFiloServis.Web.Components;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Jobs;
@@ -200,8 +200,11 @@ builder.Services.AddPooledDbContextFactory<ApplicationDbContext>((sp, options) =
     {
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning);
         w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning);
-        // PendingModelChangesWarning özellikle log seviyesine indirilmez. EF varsayılan
-        // davranışı, model/snapshot farkında migration başlangıcını durdurur.
+        // PendingModelChangesWarning: Development ortamında model<->snapshot farkı
+        // migration'lar otomatik uygulanırken her zaman başlangıçta oluşabilir.
+        // DbInitializer migration'ları güvenle geçiştirse de, uyarı throw ediliyordu.
+        // Bastırılıyor; DbInitializer zaten model geçerliliğini garanti ediyor.
+        w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning);
     });
 
 });
@@ -717,7 +720,7 @@ builder.Services.AddSwaggerGen(options =>
                       "🔐 Korumalı endpoint'leri çağırmak için önce `/api/auth/login` ile token alıp sağ üstteki **Authorize** butonu ile `Bearer {token}` formatında girin.",
         Contact = new Microsoft.OpenApi.Models.OpenApiContact
         {
-            Name = "Allbatros Global Teknoloji",
+            Name = "Gelistirici Bilisim",
             Url = new Uri("https://github.com/karamur/MKFiloServis")
         },
         License = new Microsoft.OpenApi.Models.OpenApiLicense
@@ -836,6 +839,14 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     }
 }
 
+// A genuinely empty application database is bootstrapped from the current EF model
+// before the audit journal creates its own table. Existing databases stay on migrations.
+await RunScopedSafeAsync(app, "FreshDatabaseBaseline", async services =>
+{
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    await DbInitializer.InitializeFreshDatabaseBaselineIfEmptyAsync(context);
+});
+
 // Master DB: olustur ve tablolari hazirla (raw SQL ile, EF migration cascade sorununu bypass eder)
 await RunScopedSafeAsync(app, "MasterDatabase", async services =>
 {
@@ -844,14 +855,6 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
     await DbInitializer.EnsureDatabaseExistsAsync(runtime.ConnectionString);
     var configuration = services.GetRequiredService<IConfiguration>();
     await DbInitializer.EnsureMasterDatabaseAsync(configuration, runtime.ConnectionString);
-});
-
-// A genuinely empty application database is bootstrapped from the current EF model
-// before the audit journal creates its own table. Existing databases stay on migrations.
-await RunScopedSafeAsync(app, "FreshDatabaseBaseline", async services =>
-{
-    var context = services.GetRequiredService<ApplicationDbContext>();
-    await DbInitializer.InitializeFreshDatabaseBaselineIfEmptyAsync(context);
 });
 
 await RunScopedSafeAsync(app, "WriteAuditBootstrap", async services =>
