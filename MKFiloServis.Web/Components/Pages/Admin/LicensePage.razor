@@ -1,7 +1,8 @@
-@page "/admin/license"
+﻿@page "/admin/license"
 @using Microsoft.AspNetCore.Authorization
 @using MKFiloServis.Shared.Entities
 @inject MKFiloServis.Web.Services.LicenseService LicenseService
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
 
@@ -35,6 +36,7 @@
                             <tr><td class="fw-bold">Bitis</td><td class="@(DateTime.UtcNow > _license.ExpireDate ? "text-danger fw-bold" : "text-success")">@_license.ExpireDate.ToString("dd.MM.yyyy")</td></tr>
                             <tr><td class="fw-bold">Lisanslı Modüller</td><td>
                                 @if (_license.IsDemo) { <span>Demo süresince tüm modüller</span> }
+                                else if (Env.IsDevelopment()) { <span class="text-success">Development ortamı — tüm modüller açık (lisans kontrolü devre dışı)</span> }
                                 else if (MKFiloServis.Shared.Licensing.LicenseModules.TryRead(_license.Signature, out var modules, out _))
                                 {
                                     @string.Join(", ", modules.Split(',').Select(x => MKFiloServis.Shared.Licensing.LicenseModules.All[x]))

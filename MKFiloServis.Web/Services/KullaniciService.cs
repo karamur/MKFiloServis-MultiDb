@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
 using Microsoft.AspNetCore.Identity;
@@ -741,6 +741,13 @@ public class KullaniciService : IKullaniciService
         await EnsureRolePermissionAsync(context, SistemRolleri.Operasyon, Yetkiler.TedarikciPersonelOku);
         await EnsureRolePermissionAsync(context, SistemRolleri.Operasyon, Yetkiler.TedarikciAracEvraklariOku);
 
+        // "Kullanici" sistem rolu daha once yetkisiz olusturulmus olabilir (ör. legacy veri aktarimi).
+        // Varsayilan yetkilerini eksikse geriye donuk olarak tamamla.
+        foreach (var yetkiKodu in SistemRolleri.GetDefaultPermissions(SistemRolleri.Kullanici))
+        {
+            await EnsureRolePermissionAsync(context, SistemRolleri.Kullanici, yetkiKodu);
+        }
+
         // İlk yönetici yalnızca boş veritabanında ve açıkça sağlanan sırlarla oluşturulur.
         // Var olan veya soft-delete edilmiş hesapların üzerine yazılmaz.
         var herhangiBirKullaniciVar = await context.Kullanicilar
@@ -794,29 +801,38 @@ public class KullaniciService : IKullaniciService
 
     /// <summary>
     /// Local SQLite development convenience account. The caller must restrict this to Development.
-    /// Never resets an existing account or its password.
+    /// Never resets an existing account or its password. Always Admin-rolled so every module
+    /// is visible locally without relying on per-role permission seeding.
     /// </summary>
     public async Task SeedDevelopmentTestUserAsync()
     {
         using var context = await _contextFactory.CreateDbContextAsync();
 
+        var adminRol = await context.Roller
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.RolAdi == SistemRolleri.Admin && !item.IsDeleted);
+        if (adminRol is null)
+            throw new InvalidOperationException("Varsayılan test hesabı için Admin rolü bulunamadı.");
+
         var existing = await context.Kullanicilar
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(user => user.KullaniciAdi.ToUpper() == "TEST");
         if (existing is not null)
+        {
+            if (existing.RolId != adminRol.Id)
+            {
+                existing.RolId = adminRol.Id;
+                await context.SaveChangesAsync();
+                _logger.LogInformation("Development SQLite test hesabının rolü tüm modüllere erişim için Admin olarak güncellendi.");
+            }
             return;
-
-        var role = await context.Roller
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.RolAdi == SistemRolleri.Kullanici && !item.IsDeleted);
-        if (role is null)
-            throw new InvalidOperationException("Varsayılan test hesabı için Kullanici rolü bulunamadı.");
+        }
 
         var user = new Kullanici
         {
             KullaniciAdi = "test",
             AdSoyad = "Test Kullanıcısı",
-            RolId = role.Id,
+            RolId = adminRol.Id,
             Aktif = true,
             Kilitli = false,
             CreatedAt = DateTime.UtcNow

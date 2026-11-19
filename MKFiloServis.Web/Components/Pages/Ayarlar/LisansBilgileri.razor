@@ -1,4 +1,4 @@
-@page "/ayarlar/lisans"
+﻿@page "/ayarlar/lisans"
 @layout MKFiloServis.Web.Components.Layout.EmptyLayout
 @using MKFiloServis.Shared.Entities
 @using MKFiloServis.Web.Services
@@ -7,6 +7,7 @@
 @inject IToastService ToastService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
 @rendermode InteractiveServer
 
 <PageTitle>Lisans Bilgileri</PageTitle>
@@ -61,6 +62,7 @@
                         <div class="mb-4">
                             <label class="form-label fw-bold">Lisanslı Modüller</label>
                             @if (lisans.IsDemo) { <p>Demo süresince tüm modüller.</p> }
+                            else if (Env.IsDevelopment()) { <p class="text-success">Development ortamı — tüm modüller açık (lisans kontrolü devre dışı).</p> }
                             else if (LicenseService.VerifySignature(lisans) && MKFiloServis.Shared.Licensing.LicenseModules.TryRead(lisans.Signature, out var modules, out _))
                             { <p>@string.Join(", ", modules.Split(',').Select(x => MKFiloServis.Shared.Licensing.LicenseModules.All[x]))</p> }
                             else { <p class="text-warning">Modül hakkı bulunmuyor. Lisans programından modülleri seçerek v3 lisans yükleyin.</p> }
