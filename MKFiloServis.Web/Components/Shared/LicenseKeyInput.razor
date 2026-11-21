@@ -1,0 +1,77 @@
+﻿@using System.Text
+@using MKFiloServis.Web.Services
+
+<textarea class="form-control font-monospace"
+          rows="@Rows"
+          placeholder="@Placeholder"
+          value="@Value"
+          @oninput="OnTextInput"
+          disabled="@Disabled"></textarea>
+
+<div class="d-flex align-items-center flex-wrap gap-2 mt-2">
+    <label class="btn btn-outline-secondary btn-sm mb-0 @(Disabled ? "disabled" : "")">
+        <i class="bi bi-file-earmark-arrow-up me-1"></i>Lisans dosyası seç
+        <InputFile class="d-none" OnChange="OnFileChosen" accept=".lic,.txt,.key" disabled="@Disabled" />
+    </label>
+    @if (!string.IsNullOrEmpty(_fileName))
+    {
+        <small class="text-success"><i class="bi bi-check-circle me-1"></i>@_fileName yüklendi</small>
+    }
+    @if (!string.IsNullOrEmpty(_fileError))
+    {
+        <small class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>@_fileError</small>
+    }
+</div>
+
+@code {
+    private const long MaxFileBytes = 64 * 1024;
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public int Rows { get; set; } = 5;
+    [Parameter] public string Placeholder { get; set; } = "Lisans anahtarını buraya yapıştırın veya lisans dosyasını seçin";
+
+    private string? _fileName;
+    private string? _fileError;
+
+    private async Task OnTextInput(ChangeEventArgs e)
+    {
+        _fileError = null;
+        _fileName = null;
+        Value = e.Value?.ToString();
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task OnFileChosen(InputFileChangeEventArgs e)
+    {
+        _fileError = null;
+        _fileName = null;
+        var file = e.File;
+        if (file.Size > MaxFileBytes)
+        {
+            _fileError = "Dosya çok büyük; geçerli bir lisans dosyası değil.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxFileBytes);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var key = LicenseService.NormalizeKeyInput(await reader.ReadToEndAsync());
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                _fileError = "Dosyada lisans anahtarı bulunamadı.";
+                return;
+            }
+
+            Value = key;
+            _fileName = file.Name;
+            await ValueChanged.InvokeAsync(key);
+        }
+        catch (Exception)
+        {
+            _fileError = "Dosya okunamadı. Lisansı kopyalayıp yapıştırmayı deneyin.";
+        }
+    }
+}

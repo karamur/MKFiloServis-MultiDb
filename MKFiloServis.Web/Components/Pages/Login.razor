@@ -79,7 +79,7 @@
                         </div>
                         <div class="d-flex align-items-start gap-2">
                             <span class="badge bg-primary rounded-pill mt-1">3</span>
-                            <span>Size verilen lisans anahtarını <strong>aşağıya yapıştırın</strong></span>
+                            <span>Size verilen lisansı <strong>aşağıya yapıştırın veya dosyadan yükleyin</strong></span>
                         </div>
                     </div>
                 </div>
@@ -91,13 +91,7 @@
                 @* Makine Kodu — tek tuş *@
                 <div class="license-machine-code mb-3">
                     <label class="form-label text-muted small mb-1">Makine Kodu</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control text-center font-monospace" value="@makineKodu" readonly />
-                        <button class="btn btn-primary" @onclick="MakineKoduKopyala" title="Kopyala">
-                            <i class="bi @(_makineKoduKopyalandi ? "bi-check-lg" : "bi-clipboard") me-1"></i>
-                            @(_makineKoduKopyalandi ? "Kopyalandı" : "Kopyala")
-                        </button>
-                    </div>
+                    <LicenseMachineCodePanel MachineCode="@makineKodu" />
                 </div>
 
                 <div class="license-machine-code mb-3">
@@ -123,9 +117,7 @@
                 @* Lisans girişi *@
                 <div class="license-key-input mb-3">
                     <label class="form-label text-muted small mb-1">Lisans Anahtarı</label>
-                    <textarea class="form-control font-monospace" rows="4"
-                              placeholder="Ctrl+V ile lisans anahtarını buraya yapıştırın"
-                              @bind="yeniLisansAnahtari" @bind:event="oninput"></textarea>
+                    <LicenseKeyInput @bind-Value="yeniLisansAnahtari" Rows="4" Disabled="@lisansAktivasyonYukleniyor" />
                 </div>
 
                 @* Hata mesajı *@
@@ -953,9 +945,6 @@
 
         try
         {
-            // Auto-trim
-            yeniLisansAnahtari = yeniLisansAnahtari.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
-
             var yeniLisans = await LicenseSvc.ActivateFromKeyAsync(yeniLisansAnahtari);
 
             lisans = yeniLisans;
@@ -999,25 +988,6 @@
         finally
         {
             demoKurulumuYukleniyor = false;
-        }
-    }
-
-    private bool _makineKoduKopyalandi;
-
-    private async Task MakineKoduKopyala()
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", makineKodu);
-            _makineKoduKopyalandi = true;
-            StateHasChanged();
-            await Task.Delay(2000);
-            _makineKoduKopyalandi = false;
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Login makine kodu panoya kopyalanirken hata olustu");
         }
     }
 

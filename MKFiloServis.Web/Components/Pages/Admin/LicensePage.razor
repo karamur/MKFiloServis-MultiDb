@@ -64,7 +64,9 @@
             <div class="card-header"><strong>İmzalı Lisans Yükle</strong></div>
             <div class="card-body">
                 <label class="form-label small">Lisans anahtarı</label>
-                <textarea class="form-control mb-2" rows="4" @bind="_licenseKey"></textarea>
+                <div class="mb-2">
+                    <LicenseKeyInput @bind-Value="_licenseKey" Rows="4" Disabled="@_calisiyor" />
+                </div>
                 <button class="btn btn-primary btn-sm" @onclick="LisansYukle" disabled="@_calisiyor">Lisans Yükle</button>
                 @if (!_validationIsValid && !string.IsNullOrWhiteSpace(_validationMessage))
                 {

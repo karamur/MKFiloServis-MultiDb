@@ -1,0 +1,54 @@
+﻿@inject IJSRuntime JS
+
+<div class="input-group">
+    <input type="text" class="form-control font-monospace text-center" value="@MachineCode" readonly />
+    <button type="button" class="btn btn-outline-secondary" @onclick="CopyAsync" title="Kopyala">
+        <i class="bi @(_copied ? "bi-check-lg text-success" : "bi-clipboard")"></i>
+    </button>
+    <button type="button" class="btn btn-outline-secondary" @onclick="DownloadAsync" title="Dosyaya kaydet">
+        <i class="bi bi-download"></i>
+    </button>
+</div>
+@if (!string.IsNullOrEmpty(_note))
+{
+    <small class="text-muted d-block mt-1">@_note</small>
+}
+
+@code {
+    [Parameter] public string MachineCode { get; set; } = string.Empty;
+
+    private bool _copied;
+    private string? _note;
+
+    private async Task CopyAsync()
+    {
+        if (string.IsNullOrEmpty(MachineCode)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", MachineCode);
+            _copied = true;
+            _note = null;
+            StateHasChanged();
+            await Task.Delay(2000);
+            _copied = false;
+        }
+        catch
+        {
+            _note = "Panoya kopyalanamadı. Kodu elle seçip kopyalayın veya dosyaya kaydedin.";
+        }
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (string.IsNullOrEmpty(MachineCode)) return;
+        try
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(MachineCode + Environment.NewLine);
+            await JS.InvokeVoidAsync("downloadFile", "makine-kodu.txt", Convert.ToBase64String(bytes), "text/plain");
+        }
+        catch
+        {
+            _note = "Dosya indirilemedi. Kodu elle kopyalayın.";
+        }
+    }
+}

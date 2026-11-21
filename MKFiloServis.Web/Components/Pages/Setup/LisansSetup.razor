@@ -88,16 +88,9 @@
             }
             else
             {
-                <div class="input-group">
-                    <input type="text" class="form-control form-control-sm font-monospace text-center"
-                           value="@makineKodu" readonly />
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="MakineKoduKopyalaAsync"
-                            title="Kopyala">
-                        <i class="bi @(kopyalandi ? "bi-check text-success" : "bi-clipboard")"></i>
-                    </button>
-                </div>
+                <LicenseMachineCodePanel MachineCode="@makineKodu" />
                 <small class="text-muted d-block mt-1">
-                    <i class="bi bi-info-circle me-1"></i>Bu kodu KOA'ya ileterek lisans anahtarı alınız.
+                    <i class="bi bi-info-circle me-1"></i>Bu kodu lisans sağlayıcınıza ileterek lisans alınız.
                 </small>
             }
         </div>
@@ -107,13 +100,8 @@
             <label class="form-label fw-semibold">
                 <i class="bi bi-key me-1"></i>Lisans Anahtarı
             </label>
-            <textarea class="form-control font-monospace"
-                      rows="5"
-                      placeholder="Lisans anahtarınızı buraya yapıştırın..."
-                      @bind="lisansAnahtari"
-                      @bind:event="oninput"
-                      disabled="@islemDevamEdiyor"></textarea>
-            <small class="text-muted">Lisans anahtarı KOA tarafından e-posta ile iletilir.</small>
+            <LicenseKeyInput @bind-Value="lisansAnahtari" Disabled="@islemDevamEdiyor" />
+            <small class="text-muted">Lisans, lisans sağlayıcınız tarafından size gönderilir. Metni yapıştırabilir veya dosyayı seçebilirsiniz.</small>
         </div>
 
         <!-- Butonlar -->
@@ -205,7 +193,6 @@
     private string hataMesaji = string.Empty;
     private bool islemDevamEdiyor = false;
     private bool lisansAktif = false;
-    private bool kopyalandi = false;
     private bool makineKoduYukleniyor = true;
     private string makineKodu = string.Empty;
     private LicenseInfo? mevcutLisans;
@@ -245,14 +232,14 @@
 
         if (string.IsNullOrWhiteSpace(lisansAnahtari))
         {
-            hataMesaji = "Lütfen lisans anahtarını girin.";
+            hataMesaji = "Lütfen lisans anahtarını girin veya lisans dosyasını seçin.";
             return;
         }
 
         islemDevamEdiyor = true;
         try
         {
-            var lisans = await LicenseService.ActivateFromKeyAsync(lisansAnahtari.Trim()); // Yeni format: Base64 JSON (LisansDesktop uyumlu)
+            var lisans = await LicenseService.ActivateFromKeyAsync(lisansAnahtari);
             mevcutLisans = lisans;
             lisansAktif = true;
             lisansAnahtari = string.Empty;
@@ -267,21 +254,6 @@
         {
             islemDevamEdiyor = false;
         }
-    }
-
-    private async Task MakineKoduKopyalaAsync()
-    {
-        if (string.IsNullOrEmpty(makineKodu)) return;
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", makineKodu);
-            kopyalandi = true;
-            StateHasChanged();
-            await Task.Delay(2000);
-            kopyalandi = false;
-            StateHasChanged();
-        }
-        catch { /* Clipboard erişimi reddedildi */ }
     }
 
     private void AtlaGirisYap() => Navigation.NavigateTo("/login");
