@@ -5,15 +5,15 @@ public static class LicenseSigningPublicKey
     // Yalnız açık anahtar; imzalama sırrı dağıtıma girmez.
     public const string Pem = """
         -----BEGIN PUBLIC KEY-----
-        MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAxScEI0CuYyAPEl+sMAC3
-        OXJnLMa/2ljHLdAGrneyBnPEFu+fsLAWZqsTqaC6c5JrTWHqXS+F6s4Jvi3bebmd
-        bvEjVamgxkVxcBsvLxkU/phtEOUwYxIOGx7wcr7kathx44CIdTtKAym2WO51Ur7O
-        KiHrnPALGvc1pi4FpyKErlS574nB/xgsvsC3XE8CBCzYdpCSeJIZvCVGCtrVbA56
-        3vZh+MxIXSaei4TgwKbdqmIi0cEWX8VVmVUjqSzxM9v7vLg7GqM4VCUJR+59vsbr
-        PYbb9LJRWNa8GOnLJfgolcUILdnZ97nsM89v1JDHG6Rs9qzJwbrPpFoh2mor4oOY
-        A6sgPHVSGQvm1rYThtgBDAbRBjqi02OV4SwWCIanuXpiJm9E2pzlm+HIhj/FwMC6
-        Ojm+kE5OKCdBLKksZ6Lzpv7PhZab6wnq6zzd8dTRRM59WN/w+2YTQV0106Q0kOuo
-        xgmDfTgdYxtrh+/Rkxg4U/0wN7F4CVPhLn28Xr95NZB9AgMBAAE=
+        MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA2rupnxuzVpZS5XyWI9rG
+        /DuHchAOdXhPtw6Glw76Vz/UMkr9pCg/voi4RMu0jbDJhzbkDUzzerTnA+KuzMP8
+        hmie4R52ufgB9i+3j2pfOB+P4OXPNyWxshwf1S7TbWS9saFUH5RvLSl9t1yr6zAg
+        j2XY4SFbGZPnA0ADv+ykBGVy4/40+5mhUwP+N45cvgqED2J73knTlNQ6tI563FZK
+        lb46O5tQAL+WYdSvX8h5AuSGFIvF9/bKJnoFiR7lbwaTIPlVMQoCa4EwQsgNc5ZZ
+        +G+F6k4BzW/d0NEmOnuDOCAIc9RlyBzi4aouCD21HaRm/qqm4kUbsLo+f1i10J7k
+        DGENpZAsNp0XsFONYblAMgYRsiHyynFzISFHv/0AAvdMvEt2ZdqJZ28SU+q8lstk
+        GdhA571ahom0UOjQHJiwI6+W/QbbsOPzrKB+bSMaGOZiIYjOWEX20N/f9W1Mu0Ik
+        EFXF/46bMNVIqrDqpWpjP5Lm39RdxUQEe/F82vxOpLflAgMBAAE=
         -----END PUBLIC KEY-----
         """;
 }
