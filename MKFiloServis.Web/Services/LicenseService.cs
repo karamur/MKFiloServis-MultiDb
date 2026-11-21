@@ -12,19 +12,17 @@ using System.Globalization;
 namespace MKFiloServis.Web.Services;
 
 /// <summary>
-/// Lisans dogrulama servisi — ANTI-BYPASS HARDENED (FINAL).
+/// Lisans servisi (v4). Karar mantığı Shared.Licensing.LicenseValidator'dadır; bu sınıf yalnız
+/// veri erişimi, aktivasyon ve önbellek yönetimini yapar.
 ///
-/// 10 KORUMA KATMANI:
-///   1. Registry lock — Demo sadece 1 kez (DB silinse bile)
-///   2. Machine lock  — Makine kodu: MachineName + UserName + DriveSerial
-///   3. Signature     — FirmaKodu|MachineId|ExpireDate|IsDemo|AllowedVersion|CreatedAt
-///   4. Clock attack  — 3 katman: ExpireDate + CreatedAt + NegativeTime
-///   5. File hash     — C:\KOAFiloServis\config\license.hash
-///   6. Hard block    — Startup'ta gecersiz lisans = uygulama acilmaz
-///   7. Single system — LicenseService + LicenseInfos (eski sistem tamamen kalkti)
-///   8. Security viol — Registry yok ama DB'de lisans varsa ihlal tespiti
-///   9. Version check — AllowedVersion kontrolu
-///  10. File integrity — Hash yoksa veya okunamiyorsa dogrulama basarisiz olur
+///   1. İmza        — RSA-PSS (v3 modüllü / v2), çoklu genel anahtar (rotasyon)
+///   2. Makine      — Parmak izi v2 (4 bileşen, 1 değişikliğe tolerans); eski biçim de kabul edilir
+///   3. Saat        — CreatedAt + son görülen zaman (DB + yerel durum dosyası), 1 saat tolerans
+///   4. Süre        — 14 gün yenileme toleransı (yalnız daha önce doğrulanmış ticari lisans)
+///   5. Demo        — Registry kilidi, 15 gün, yalnız SQLite demo veritabanı
+///   6. Sürüm/Firma — AllowedVersion ve yapılandırılmış FirmaKodu kontrolü
+///   7. Önbellek    — Doğrulanan modül kümesi bellekte tutulur; yetki sorguları RSA çalıştırmaz
+/// Hiçbir kontrol yerel dosya yazılabilirliğine bağlı değildir (dosya hatası lisansı bozmaz).
 /// </summary>
 public class LicenseService
 {
@@ -35,8 +33,7 @@ public class LicenseService
     private readonly DatabaseRuntimeInfo _databaseRuntime;
     private readonly IDataProtector _demoProtector;
     private readonly IWebHostEnvironment _env;
-    // Public verification key only. The private signing key is kept outside the repository and installers.
-    private const string PublicKeyPem = MKFiloServis.Shared.Licensing.LicenseSigningPublicKey.Pem;
+    private readonly IDataProtector _stateProtector;
     private const string RegistryPath = @"SOFTWARE\KOAFiloServis";
     private const string DemoUsedValueName = "DemoUsed";
     private const int DemoMaxDays = 15;
@@ -50,8 +47,13 @@ public class LicenseService
         _cache = cache;
         _databaseRuntime = databaseRuntime;
         _demoProtector = dataProtection.CreateProtector("MKFiloServis.License.Demo.v1");
+        _stateProtector = dataProtection.CreateProtector("MKFiloServis.License.State.v1");
         _env = env;
     }
+
+    /// <summary>Development'ta varsayılan olarak tüm modüller açık sahte lisans kullanılır; Licensing:EnforceInDevelopment=true ile gerçek doğrulama denenir.</summary>
+    private bool UseDevelopmentBypass
+        => _env.IsDevelopment() && !_config.GetValue<bool>("Licensing:EnforceInDevelopment");
 
     // ══════════════════════════════════════════════
     // PART 1: REGISTRY LOCK — Demo sadece 1 kez
@@ -96,7 +98,17 @@ public class LicenseService
     // MachineName + UserName + StableHardwareFingerprint
     // ══════════════════════════════════════════════
 
-    public static string GetMachineId()
+    /// <summary>Lisans bağlama kimliği: parmak izi v2 (PC adı/kullanıcı adından bağımsız).</summary>
+    public static string GetMachineId() => MKFiloServis.Shared.Licensing.MachineFingerprint.Current;
+
+    /// <summary>Bu makinenin kabul edilen kimlikleri; eski biçimde bağlanmış lisanslar için ikinci sırada eski kimlik üretilir.</summary>
+    private static IEnumerable<string> AcceptedMachineIds()
+    {
+        yield return GetMachineId();
+        yield return GetLegacyMachineId();
+    }
+
+    private static string GetLegacyMachineId()
     {
         try
         {
@@ -144,31 +156,21 @@ public class LicenseService
     public bool VerifySignature(LicenseInfo lic)
     {
         var signature = lic.Signature ?? string.Empty;
-        var payload = Encoding.UTF8.GetBytes(SignaturePayload(lic));
         try
         {
-            if (MKFiloServis.Shared.Licensing.LicenseModules.TryRead(signature, out var modules, out var signed) && !lic.IsDemo)
-            {
-                using var rsa = RSA.Create();
-                rsa.ImportFromPem(PublicKeyPem);
-                var modulePayload = MKFiloServis.Shared.Licensing.LicenseModules.Payload(SignaturePayload(lic), modules);
-                return rsa.VerifyData(Encoding.UTF8.GetBytes(modulePayload), Convert.FromBase64String(signed),
-                    HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-            }
-
-            if (signature.StartsWith("v2:", StringComparison.Ordinal) && !lic.IsDemo)
-            {
-                using var rsa = RSA.Create();
-                rsa.ImportFromPem(PublicKeyPem);
-                return rsa.VerifyData(payload, Convert.FromBase64String(signature[3..]),
-                    HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
-            }
+            if (!lic.IsDemo && MKFiloServis.Shared.Licensing.LicenseSignatureVerifier.VerifyRsa(
+                    lic, MKFiloServis.Shared.Licensing.LicenseSigningPublicKey.All))
+                return true;
 
             if (signature.StartsWith("demo:", StringComparison.Ordinal) && lic.IsDemo)
             {
                 var original = _demoProtector.Unprotect(signature[5..]);
-                return CryptographicOperations.FixedTimeEquals(payload, Encoding.UTF8.GetBytes(original));
+                return CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(SignaturePayload(lic)), Encoding.UTF8.GetBytes(original));
             }
+
+            if (signature.StartsWith("v2:", StringComparison.Ordinal) || signature.StartsWith("v3:", StringComparison.Ordinal))
+                return false;
 
             // Eski lisanslar yalnızca kurulum sahibinin tanımladığı süreli geçişte kabul edilir.
             var legacySecret = _config["Licensing:LegacyVerificationSecret"];
@@ -184,76 +186,67 @@ public class LicenseService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or FormatException or CryptographicException)
         {
-            _logger.LogWarning("Lisans imzasi veya dogrulama anahtari okunamadi: {Reason}", ex.GetType().Name);
+            _logger.LogWarning("Lisans imzasi dogrulanamadi: {Reason}", ex.GetType().Name);
             return false;
         }
     }
 
     // ══════════════════════════════════════════════
-    // PART 5: LICENSE FILE HASH PROTECTION
-    // C:\KOAFiloServis\config\license.hash
+    // SON GÖRÜLEN ZAMAN (saat geri alma koruması)
+    // Yerel, korumalı bir dosyada tutulur; DB geri yüklense bile saat geri alınması fark edilir.
+    // Dosya okunamaz/yazılamazsa lisans etkilenmez (yalnızca ek koruma devre dışı kalır).
     // ══════════════════════════════════════════════
 
-    private static string GetLicenseHashDirectory()
-        => @"C:\KOAFiloServis\config";
-
-    private static string GetLicenseHashPath()
-        => Path.Combine(GetLicenseHashDirectory(), "license.hash");
-
-    private static string ComputeLicenseHash(LicenseInfo lic)
+    private static IEnumerable<string> StatePaths()
     {
-        var raw = $"{lic.FirmaKodu}|{lic.MachineId}|{lic.ExpireDate:yyyy-MM-dd}|{lic.IsDemo}|{lic.Signature}|{lic.CreatedAt:yyyy-MM-dd}";
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
-        return Convert.ToBase64String(hash);
-    }
-
-    private void WriteLicenseHash(LicenseInfo lic)
-    {
-        try
+        foreach (var folder in new[] { Environment.SpecialFolder.CommonApplicationData, Environment.SpecialFolder.LocalApplicationData })
         {
-            var dir = GetLicenseHashDirectory();
-            Directory.CreateDirectory(dir);
-
-            var hash = ComputeLicenseHash(lic);
-            var path = GetLicenseHashPath();
-            File.WriteAllText(path, hash);
-
-            _logger.LogInformation("License hash written to disk: {Path}", path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "License hash yazilamadi (disk hatasi): {FirmaKodu}", lic.FirmaKodu);
+            var root = Environment.GetFolderPath(folder);
+            if (!string.IsNullOrWhiteSpace(root))
+                yield return Path.Combine(root, "MKFiloServis", "license-state.bin");
         }
     }
 
-    private bool VerifyLicenseHash(LicenseInfo lic)
+    private DateTime? ReadLastSeenUtc()
     {
-        try
+        DateTime? latest = null;
+        foreach (var path in StatePaths())
         {
-            var path = GetLicenseHashPath();
-            if (!File.Exists(path))
+            try
             {
-                _logger.LogError("Lisans bütünlük dosyası bulunamadı: {Path}. Lisans yeniden yüklenmelidir.", path);
-                return false;
+                if (!File.Exists(path)) continue;
+                var text = _stateProtector.Unprotect(File.ReadAllText(path).Trim());
+                if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ticks)
+                    && ticks > 0 && ticks <= DateTime.MaxValue.Ticks)
+                {
+                    var seen = new DateTime(ticks, DateTimeKind.Utc);
+                    if (latest is null || seen > latest) latest = seen;
+                }
             }
-
-            var storedHash = File.ReadAllText(path).Trim();
-            var computedHash = ComputeLicenseHash(lic);
-
-            if (!CryptographicOperations.FixedTimeEquals(
-                    Encoding.UTF8.GetBytes(storedHash),
-                    Encoding.UTF8.GetBytes(computedHash)))
+            catch (Exception ex)
             {
-                _logger.LogError("Lisans bütünlük doğrulaması başarısız oldu.");
-                return false;
+                // Anahtar halkası yenilenmiş veya dosya bozuk: bu ek koruma sessizce atlanır.
+                _logger.LogDebug(ex, "Lisans durum dosyasi okunamadi: {Path}", path);
             }
-
-            return true;
         }
-        catch (Exception ex)
+        return latest;
+    }
+
+    private void WriteLastSeenUtc(DateTime utc)
+    {
+        var payload = _stateProtector.Protect(utc.Ticks.ToString(CultureInfo.InvariantCulture));
+        foreach (var path in StatePaths())
         {
-            _logger.LogWarning(ex, "License hash dogrulama hatasi (disk erisilemez)");
-            return false;
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, payload);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Lisans durum dosyasi yazilamadi: {Path}", path);
+            }
         }
     }
 
@@ -277,27 +270,45 @@ public class LicenseService
         => MKFiloServis.Shared.Licensing.LicenseVersionPolicy.Allows(allowedVersion, GetAppVersion());
 
     // ══════════════════════════════════════════════
-    // CORE: VALIDATE — 10 katman koruma (PROD only)
+    // CORE: VALIDATE — politika Shared.LicenseValidator'da
     // ══════════════════════════════════════════════
 
     private async Task PublishValidatedLicenseAsync(LicenseInfo lic)
     {
-        WriteLicenseHash(lic);
         var validation = await ValidateAsync(persistValidation: false);
         if (!validation.IsValid)
             throw new InvalidOperationException(validation.Message);
+        WriteLastSeenUtc(DateTime.UtcNow);
     }
 
-    private LicenseValidationResult FailValidation(string message)
+    private LicenseValidationResult FailValidation(MKFiloServis.Shared.Licensing.LicenseStatusCode code, string message)
     {
         _cache.Clear();
-        return LicenseValidationResult.Fail(message);
+        return LicenseValidationResult.Fail(code, message);
+    }
+
+    private MKFiloServis.Shared.Licensing.LicenseValidationContext BuildContext(LicenseInfo? lic)
+    {
+        var lastSeen = ReadLastSeenUtc();
+        if (lic?.LastValidatedAt is { } validated && (lastSeen is null || validated > lastSeen))
+            lastSeen = validated;
+
+        return new MKFiloServis.Shared.Licensing.LicenseValidationContext
+        {
+            NowUtc = DateTime.UtcNow,
+            MachineIds = AcceptedMachineIds(),
+            AppVersion = GetAppVersion(),
+            ExpectedCompanyCode = _config["FirmaKodu"],
+            LastSeenUtc = lastSeen,
+            DemoMaxDays = DemoMaxDays,
+            VerifySignature = VerifySignature
+        };
     }
 
     public async Task<LicenseValidationResult> ValidateAsync(bool persistValidation = true)
     {
-        // Development ortamında lisans dogrulamasini (DB sorgusu + 10 katmanli kontrol) atla.
-        if (_env.IsDevelopment())
+        // Development ortamında varsayılan olarak sahte lisans döner (EnforceInDevelopment ile kapatılabilir).
+        if (UseDevelopmentBypass)
         {
             var mockLicense = await GetCurrentLicenseAsync();
             return LicenseValidationResult.Ok(mockLicense!);
@@ -319,116 +330,44 @@ public class LicenseService
             // ── Lisans yok: demo ancak kullanıcı giriş ekranından açıkça başlatır ──
             if (lic == null)
             {
-                // PART 1: Registry kontrolu
-                if (HasDemoBeenUsed())
-                    return FailValidation(
-                        "🛑 Demo hakki zaten kullanilmis. Lisans dosyasini yukleyin.");
-
                 if (hasAnyLicense)
-                    return FailValidation(
-                        "🛑 Veritabaninda lisans kaydi var fakat aktif degil. Lisans dosyasini yukleyin.");
+                    return FailValidation(MKFiloServis.Shared.Licensing.LicenseStatusCode.Inactive,
+                        "Veritabanında lisans kaydı var fakat aktif değil. Lisans anahtarını yeniden yükleyin.");
 
-                return FailValidation(
-                    "Lisans bulunamadı. Giriş ekranından 15 günlük demo modunu başlatabilir veya lisans anahtarı yükleyebilirsiniz.");
+                return FailValidation(MKFiloServis.Shared.Licensing.LicenseStatusCode.NotFound,
+                    HasDemoBeenUsed()
+                        ? "Lisans bulunamadı. Demo hakkı kullanılmış; lisans anahtarı yükleyin."
+                        : "Lisans bulunamadı. Giriş ekranından 15 günlük demo modunu başlatabilir veya lisans anahtarı yükleyebilirsiniz.");
             }
 
-            // ── PART 8: SECURITY VIOLATION — registry silinmis ama DB'de lisans var ──
-            if (lic.IsDemo && !HasDemoBeenUsed() && hasAnyLicense)
+            // Registry'de demo kaydı yok ama DB'de demo lisans var: demo kilidi atlatılmaya çalışılmış olabilir.
+            if (lic.IsDemo && !HasDemoBeenUsed())
             {
-                _logger.LogCritical(
-                    "🚨 GUVENLIK IHLALI! Registry'de demo kaydi yok ama DB'de demo lisans var. Makine: {MachineId}",
-                    GetMachineId());
-                return FailValidation(
-                    "🛑 Guvenlik ihlali tespit edildi. Demo lisans dosyasi degistirilmis olabilir. Lisans dosyasini tekrar yukleyin.");
+                _logger.LogCritical("Registry'de demo kaydi yok ama DB'de demo lisans var. Makine: {MachineId}", GetMachineId());
+                return FailValidation(MKFiloServis.Shared.Licensing.LicenseStatusCode.SignatureInvalid,
+                    "Demo lisans kaydı doğrulanamadı. Lisans anahtarını yükleyin.");
             }
 
-            // ── PART 4.3: Negative time attack ──
-            if (DateTime.UtcNow < lic.CreatedAt)
-                return FailValidation(
-                    "🛑 Sistem saati hatali. Lisans olusturma tarihinden onceki bir tarih algilandi. Lutfen saat ayarlarinizi kontrol edin.");
-
-            // ── PART 2: Machine lock ──
-            var currentMachineId = GetMachineId();
-            if (!IsSameMachineBinding(lic.MachineId, currentMachineId))
+            var evaluation = MKFiloServis.Shared.Licensing.LicenseValidator.Evaluate(lic, BuildContext(lic));
+            if (!evaluation.IsValid)
             {
-                // Veritabanı farklı bilgisayara taşındıysa mevcut aktif lisansı pasife al.
-                // Böylece sistem yeni PC'de yeniden lisans aktivasyonu ister.
-                await db.LicenseInfos
-                    .IgnoreQueryFilters()
-                    .Where(l => l.IsActive)
-                    .UpdateTrackedAsync(db, record =>
-                    {
-                        record.IsActive = false;
-                        record.UpdatedAt = DateTime.UtcNow;
-                    });
-
-                _cache.Clear();
-
-                return FailValidation(
-                    "🛑 Lisans bu bilgisayar için geçerli değil. Veritabanı başka bir bilgisayara taşınmış olabilir. Bu makine için yeni lisans anahtarı girin.");
+                _logger.LogWarning("Lisans reddedildi: {Code}, Makine: {MachineId}", evaluation.Code, GetMachineId());
+                return FailValidation(evaluation.Code, evaluation.Message);
             }
 
-            // ── PART 4.1: CreatedAt tabanli (demo icin mutlak 30 gun) ──
-            if (lic.IsDemo)
-            {
-                var elapsed = (DateTime.UtcNow - lic.CreatedAt).TotalDays;
-                if (elapsed > DemoMaxDays)
-                {
-                    _logger.LogWarning("Demo suresi doldu (CreatedAt): {Days} gun, Makine: {MachineId}",
-                        elapsed, currentMachineId);
-                    return FailValidation(
-                        $"🛑 Demo suresi doldu. Olusturma: {lic.CreatedAt:yyyy-MM-dd}, Gecen gun: {elapsed:F0}/{DemoMaxDays}");
-                }
-            }
-
-            // Son başarılı kontrolden geriye alınan saat, tolerans dışında reddedilir.
-            var nowUtc = DateTime.UtcNow;
-            if (lic.LastValidatedAt.HasValue && lic.LastValidatedAt.Value - nowUtc > TimeSpan.FromMinutes(5))
-                return FailValidation("🛑 Sistem saati son lisans kontrolünden önceye alınmış.");
-
-            // Ticari lisanslarda en fazla 14 gün sabit yenileme toleransı.
-            // Demo için tolerans verilmez; önceden doğrulanmamış lisans tolerans kullanamaz.
-            var inRenewalGrace = !lic.IsDemo && lic.LastValidatedAt.HasValue &&
-                nowUtc > lic.ExpireDate && nowUtc - lic.ExpireDate <= TimeSpan.FromDays(14);
-            if (nowUtc > lic.ExpireDate && !inRenewalGrace)
-                return FailValidation(
-                    $"🛑 Lisans suresi doldu ({lic.ExpireDate:yyyy-MM-dd}).");
-
-            // ── Firma kodu kontrolu (sadece config'de varsa ve lisans demosu degilse) ──
-            var configFirma = _config["FirmaKodu"];
-            if (!string.IsNullOrWhiteSpace(configFirma) && !lic.IsDemo && lic.FirmaKodu != configFirma)
-                return FailValidation(
-                    $"🛑 Firma kodu uyusmazligi: '{lic.FirmaKodu}' != '{configFirma}'");
-
-            // ── PART 3: Signature dogrulama ──
-            if (!VerifySignature(lic))
-                return FailValidation(
-                    !string.IsNullOrEmpty(lic.Signature) && !lic.Signature.Contains(':')
-                        ? "🛑 Eski lisans imzasi artik kabul edilmiyor. Mevcut sureyi koruyan v2 imzali lisans yukleyin."
-                        : "🛑 Lisans imzasi gecersiz. Lisans dosyasi bozulmus veya degistirilmis olabilir.");
-
-            // ── PART 9: Version check ──
-            if (!IsVersionAllowed(lic.AllowedVersion))
-                return FailValidation(
-                    $"🛑 Bu uygulama surumu ({GetAppVersion()}) lisansa dahil degil. Izin verilen max surum: {lic.AllowedVersion}");
-
-            // ── PART 5: License file hash verification ──
-            if (!VerifyLicenseHash(lic))
-                return FailValidation(
-                    "🛑 Lisans dosyasi degistirilmis! Hash uyusmazligi tespit edildi. Lisansi tekrar yukleyin.");
-
-            if (inRenewalGrace)
+            if (evaluation.InGrace)
                 _logger.LogWarning("Lisans yenileme toleransinda: Firma={Firma}, Bitis={ExpireDate}",
                     lic.FirmaKodu, lic.ExpireDate);
 
-            // ── Basarili ──
             if (persistValidation)
             {
                 lic.LastValidatedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync();
+                WriteLastSeenUtc(DateTime.UtcNow);
             }
 
-            _cache.Set(lic, validated: true); // Tam doğrulama sonrası modül hakları açılır
+            // Doğrulanan modül kümesi önbelleğe alınır; yetki sorguları artık RSA çalıştırmaz.
+            _cache.Set(lic, validated: true, modules: evaluation.Modules);
 
             return LicenseValidationResult.Ok(lic);
         }
@@ -521,7 +460,7 @@ public class LicenseService
     /// </summary>
     public async Task<LicenseInfo> ActivateFromKeyAsync(string key)
     {
-        key = key.Trim().Replace("\r", "").Replace("\n", "").Replace(" ", "");
+        key = NormalizeKeyInput(key);
 
         var lic = TryParseJsonLicenseKey(key);
         if (lic == null)
@@ -534,29 +473,27 @@ public class LicenseService
             throw new Exception("Lisans anahtari eksik bilgi iceriyor.");
 
         if (!VerifySignature(lic))
-            throw new Exception("Lisans imzasi gecersiz. Anahtar degistirilmis olabilir.");
+            throw new Exception("Lisans imzası geçersiz. Anahtar eksik kopyalanmış veya değiştirilmiş olabilir; lisansı yeniden kopyalayın.");
 
-        // Makine kodunun tamamı eşleşmeli; donanım değişiminde yeni imzalı lisans gerekir.
-        if (!IsSameMachineBinding(lic.MachineId, GetMachineId()))
-            throw new Exception("Bu lisans anahtari bu bilgisayar icin gecerli degil.");
+        // Makine kodu parmak izi toleranslıdır; kökten farklı bir bilgisayar için üretilmiş lisans reddedilir.
+        if (!IsSameMachineBinding(lic.MachineId))
+            throw new Exception($"Bu lisans bu bilgisayar için geçerli değil. Bu bilgisayarın makine kodu: {GetMachineId()}");
 
-        if (DateTime.UtcNow < lic.CreatedAt)
-            throw new InvalidOperationException("Lisans oluşturma tarihi gelecekte. Sistem saatini ve lisans kaydını kontrol edin.");
+        if (DateTime.UtcNow < lic.CreatedAt - TimeSpan.FromDays(1))
+            throw new InvalidOperationException("Lisans oluşturma tarihi gelecekte görünüyor. Bu bilgisayarın tarih ve saat ayarını kontrol edin.");
 
-        // ExpireDate kontrolu
-        if (DateTime.UtcNow > lic.ExpireDate)
-            throw new Exception($"Lisans suresi {lic.ExpireDate:yyyy-MM-dd} tarihinde dolmus.");
+        if (DateTime.UtcNow > MKFiloServis.Shared.Licensing.LicenseValidator.EffectiveExpiry(lic))
+            throw new Exception($"Lisans süresi {lic.ExpireDate:yyyy-MM-dd} tarihinde dolmuş. Yeni lisans anahtarı alın.");
 
-        // Version kontrolu
         if (!IsVersionAllowed(lic.AllowedVersion))
-            throw new Exception($"Bu uygulama surumu ({GetAppVersion()}) lisansa dahil degil. Max: {lic.AllowedVersion}");
+            throw new Exception($"Bu uygulama sürümü ({GetAppVersion()}) lisansa dahil değil. İzin verilen en yüksek sürüm: {lic.AllowedVersion}");
 
-        // 🔥 PART 9: DurationDays tutarlilik kontrolu — tolerans ±2 gun
+        // Gün sayısı ile tarih farkı tutarsızsa imza zaten bunları birlikte doğruladığı için müşteri engellenmez.
         if (lic.DurationDays > 0)
         {
             var expectedDays = (lic.ExpireDate.Date - lic.CreatedAt.Date).Days;
             if (Math.Abs(expectedDays - lic.DurationDays) > 2)
-                throw new Exception($"Lisans suresi hatali: {lic.DurationDays} gun belirtilmis ama tarihler arasi {expectedDays} gun.");
+                _logger.LogWarning("Lisans sure tutarsizligi: DurationDays={Days}, tarih farki={Expected}", lic.DurationDays, expectedDays);
         }
 
         // DB'ye kaydet — eski lisanslari pasif yap
@@ -611,9 +548,9 @@ public class LicenseService
             .FirstOrDefaultAsync(l => !l.IsDeleted && l.Signature == lic.Signature && l.MachineId == lic.MachineId);
         if (existingLicense is not null)
         {
-            var existingId = existingLicense.Id;
+            // Anahtar (Id) değerleri aynı olmalı; yoksa EF birincil anahtarı değiştirmeye çalışıp hata verir.
+            lic.Id = existingLicense.Id;
             db.Entry(existingLicense).CurrentValues.SetValues(lic);
-            existingLicense.Id = existingId;
             lic = existingLicense;
         }
 
@@ -801,8 +738,7 @@ public class LicenseService
             if (root.TryGetProperty("MakineKodu", out var mk))
             {
                 var lisansMakineKodu = mk.GetString() ?? "";
-                var currentMakineKodu = GetMachineId();
-                if (!IsSameMachineBinding(lisansMakineKodu, currentMakineKodu))
+                if (!IsSameMachineBinding(lisansMakineKodu))
                 {
                     throw new Exception("Bu lisans baska bir bilgisayar icin olusturulmus!");
                 }
@@ -832,8 +768,17 @@ public class LicenseService
         }
     }
 
-    private static bool IsSameMachineBinding(string? licenseMachineId, string? currentMachineId)
-        => MKFiloServis.Shared.Licensing.LicenseIdentity.MatchesMachine(licenseMachineId, currentMachineId);
+    private static bool IsSameMachineBinding(string? licenseMachineId)
+        => MKFiloServis.Shared.Licensing.LicenseValidator.MachineAllowed(licenseMachineId, AcceptedMachineIds());
+
+    /// <summary>Anahtar kutusuna yapıştırılan metinden lisans anahtarını ayıklar ("LicenseKey=" satırı, tırnak, boşluk, satır sonu).</summary>
+    public static string NormalizeKeyInput(string? input)
+    {
+        var text = (input ?? string.Empty).Trim().Trim('\uFEFF');
+        var marker = text.LastIndexOf("LicenseKey=", StringComparison.OrdinalIgnoreCase);
+        if (marker >= 0) text = text[(marker + "LicenseKey=".Length)..];
+        return new string(text.Where(c => !char.IsWhiteSpace(c) && c != '"' && c != '\'' && c != '\uFEFF').ToArray());
+    }
 
     private string DecryptLicenseKey(string cipherText)
     {
@@ -868,12 +813,35 @@ public class LicenseService
         {
             var bytes = Convert.FromBase64String(key);
             var json = Encoding.UTF8.GetString(bytes);
-            return JsonSerializer.Deserialize<LicenseInfo>(json);
+            var lic = JsonSerializer.Deserialize<LicenseInfo>(json);
+            if (lic == null) return null;
+
+            // İmza tarihleri takvim günü olarak alır; "+03:00" gibi ofsetli yazılmış değerler
+            // saat dilimi dönüşümüyle bir gün kayıp imzayı bozmasın diye yazıldığı gibi okunur.
+            using var doc = JsonDocument.Parse(json);
+            lic.ExpireDate = ReadLiteralDate(doc.RootElement, nameof(LicenseInfo.ExpireDate), lic.ExpireDate);
+            lic.CreatedAt = ReadLiteralDate(doc.RootElement, nameof(LicenseInfo.CreatedAt), lic.CreatedAt);
+            return lic;
         }
         catch
         {
             return null;
         }
+    }
+
+    private static DateTime ReadLiteralDate(JsonElement root, string name, DateTime fallback)
+    {
+        foreach (var p in root.EnumerateObject())
+        {
+            if (!string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase) || p.Value.ValueKind != JsonValueKind.String)
+                continue;
+            var text = p.Value.GetString();
+            if (text is { Length: >= 10 } &&
+                DateTime.TryParse(text.Length >= 19 ? text[..19] : text[..10], CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var literal))
+                return DateTime.SpecifyKind(literal, DateTimeKind.Utc);
+        }
+        return fallback;
     }
 
     private LicenseInfo? TryParseLegacyEncryptedLicenseKey(string key)
@@ -948,8 +916,8 @@ public class LicenseService
 
     public async Task<LicenseInfo?> GetCurrentLicenseAsync()
     {
-        // Development ortamında mock lisans döndür
-        if (_env.IsDevelopment())
+        // Development ortamında varsayılan olarak mock lisans döndür
+        if (UseDevelopmentBypass)
         {
             var mockLicense = new LicenseInfo
             {
@@ -1043,20 +1011,33 @@ public class LicenseService
 
     public bool HasModulePermission(string moduleName)
     {
-        // Development ortamında tüm modüller açık
-        if (_env.IsDevelopment())
+        // Development bypass: tüm modüller açık
+        if (UseDevelopmentBypass)
             return true;
 
-        var lic = _cache.GetValidated();
-        if (lic == null || !lic.IsActive || lic.IsDeleted || !VerifySignature(lic)) return false;
-        var now = DateTime.UtcNow;
-        if (now < lic.CreatedAt || !IsVersionAllowed(lic.AllowedVersion)) return false;
-        var grace = !lic.IsDemo && lic.LastValidatedAt.HasValue && now - lic.ExpireDate <= TimeSpan.FromDays(14);
-        if (now > lic.ExpireDate && !grace) return false;
         if (!MKFiloServis.Shared.Licensing.LicenseModules.All.ContainsKey(moduleName)) return false;
-        if (lic.IsDemo) return !IsDemoExpired(lic);
-        return MKFiloServis.Shared.Licensing.LicenseModules.TryRead(lic.Signature, out var modules, out _)
-            && modules.Split(',').Contains(moduleName, StringComparer.Ordinal);
+
+        // Modül kümesi tam doğrulama anında çıkarılıp önbelleğe alınır; burada RSA çalıştırılmaz.
+        var snapshot = _cache.GetSnapshot();
+        if (snapshot is null) return false;
+
+        var lic = snapshot.License;
+        if (!lic.IsActive || lic.IsDeleted) return false;
+
+        // Süre uzun süren sunucularda dolabileceğinden her sorguda ucuz zaman kontrolü yapılır.
+        var now = DateTime.UtcNow;
+        if (lic.IsDemo)
+        {
+            if (IsDemoExpired(lic)) return false;
+        }
+        else if (now > MKFiloServis.Shared.Licensing.LicenseValidator.EffectiveExpiry(lic))
+        {
+            var grace = lic.LastValidatedAt.HasValue &&
+                now - MKFiloServis.Shared.Licensing.LicenseValidator.EffectiveExpiry(lic) <= TimeSpan.FromDays(14);
+            if (!grace) return false;
+        }
+
+        return snapshot.Modules.Contains(moduleName);
     }
 
     public bool HasLicensedPermission(string permission)
@@ -1107,12 +1088,13 @@ public class LicenseValidationResult
 {
     public bool IsValid { get; set; }
     public bool IsTransientFailure { get; set; }
+    public MKFiloServis.Shared.Licensing.LicenseStatusCode Code { get; set; }
     public string Message { get; set; } = string.Empty;
     public LicenseInfo? License { get; set; }
 
-    public static LicenseValidationResult Ok(LicenseInfo lic) => new() { IsValid = true, License = lic };
-    public static LicenseValidationResult Fail(string msg) => new() { IsValid = false, Message = msg };
-    public static LicenseValidationResult Unavailable(string msg) => new() { IsValid = false, IsTransientFailure = true, Message = msg };
+    public static LicenseValidationResult Ok(LicenseInfo lic) => new() { IsValid = true, Code = MKFiloServis.Shared.Licensing.LicenseStatusCode.Ok, License = lic };
+    public static LicenseValidationResult Fail(MKFiloServis.Shared.Licensing.LicenseStatusCode code, string msg) => new() { IsValid = false, Code = code, Message = msg };
+    public static LicenseValidationResult Unavailable(string msg) => new() { IsValid = false, IsTransientFailure = true, Code = MKFiloServis.Shared.Licensing.LicenseStatusCode.Unavailable, Message = msg };
 }
 
 

@@ -2,6 +2,9 @@
 
 namespace MKFiloServis.Web.Services;
 
+/// <summary>Tam doğrulanmış lisansın bellek anlık görüntüsü: kayıt ve doğrulanan modül kümesi.</summary>
+public sealed record LicenseSnapshot(LicenseInfo License, IReadOnlySet<string> Modules);
+
 /// <summary>
 /// Singleton lisans cache'i.
 /// LicenseService (Scoped) tarafından yazılır, tüm component'ler tarafından okunur.
@@ -10,6 +13,8 @@ namespace MKFiloServis.Web.Services;
 public class LicenseCache
 {
     private readonly object _lock = new();
+    private static readonly IReadOnlySet<string> NoModules = new HashSet<string>();
+    private IReadOnlySet<string> _modules = NoModules;
     private LicenseInfo? _cachedLicense;
     private bool _validated;
     public event Action? Changed;
@@ -26,8 +31,14 @@ public class LicenseCache
         lock (_lock) return _validated ? _cachedLicense : null;
     }
 
+    /// <summary>Tam doğrulanmış lisans ve modülleri; doğrulanmamışsa null.</summary>
+    public LicenseSnapshot? GetSnapshot()
+    {
+        lock (_lock) return _validated && _cachedLicense != null ? new LicenseSnapshot(_cachedLicense, _modules) : null;
+    }
+
     /// <summary>Cache'i güncelle (thread-safe).</summary>
-    public void Set(LicenseInfo lic, bool validated = false)
+    public void Set(LicenseInfo lic, bool validated = false, IReadOnlySet<string>? modules = null)
     {
         bool changed;
         lock (_lock)
@@ -35,6 +46,7 @@ public class LicenseCache
             changed = _cachedLicense?.Signature != lic.Signature || _cachedLicense?.IsActive != lic.IsActive || _validated != validated;
             _cachedLicense = lic;
             _validated = validated;
+            _modules = validated ? modules ?? NoModules : NoModules;
         }
         if (changed) Changed?.Invoke();
     }
@@ -47,6 +59,7 @@ public class LicenseCache
         {
             changed = _cachedLicense != null || _validated;
             _cachedLicense = null;
+            _modules = NoModules;
             _validated = false;
         }
         if (changed) Changed?.Invoke();

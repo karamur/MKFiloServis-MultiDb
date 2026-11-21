@@ -2,6 +2,9 @@
 
 public static class LicenseSigningPublicKey
 {
+    /// <summary>Doğrulamada denenen tüm genel anahtarlar; anahtar rotasyonunda eskisi korunup yenisi eklenir.</summary>
+    public static IReadOnlyList<string> All { get; } = new[] { Pem };
+
     // Yalnız açık anahtar; imzalama sırrı dağıtıma girmez.
     public const string Pem = """
         -----BEGIN PUBLIC KEY-----

@@ -1514,6 +1514,13 @@ using (var scope = app.Services.CreateScope())
                 logger.LogWarning("⚠️ Auto lisans dosyasi bos: {Path}", autoLicensePath);
             }
         }
+
+        // Lisansı başlangıçta doğrula: önbellek ilk girişten önce hazır olur ve durum günlüğe yazılır.
+        var startupLicense = await licSvc.ValidateAsync();
+        if (startupLicense.IsValid)
+            logger.LogInformation("Lisans durumu: {Code}", startupLicense.Code);
+        else
+            logger.LogWarning("Lisans durumu: {Code} - {Message}", startupLicense.Code, startupLicense.Message);
     }
     catch (Exception ex)
     {

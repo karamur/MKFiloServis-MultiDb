@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -1007,6 +1007,15 @@ public class MainForm : Form
         if (string.IsNullOrWhiteSpace(txtMachine.Text))
         {
             MessageBox.Show("Machine ID zorunlu.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
+
+        var machineText = NormalizeMachineId(txtMachine.Text);
+        if (machineText.StartsWith("FP2", StringComparison.OrdinalIgnoreCase)
+            && !MKFiloServis.Shared.Licensing.MachineFingerprint.IsFingerprint(machineText))
+        {
+            MessageBox.Show("Makine kodu eksik veya hatalı kopyalanmış. Beklenen biçim: FP2-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX",
+                "Geçersiz Makine Kodu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
 

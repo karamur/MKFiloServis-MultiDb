@@ -1,10 +1,15 @@
-namespace MKFiloServis.Shared.Licensing;
+﻿namespace MKFiloServis.Shared.Licensing;
 
 /// <summary>Üretici giriş normalizasyonu. Doğrulamada imzalı alanlar yeniden yazılmaz.</summary>
 public static class LicenseIdentity
 {
     public static string CompanyCode(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
-    public static string MachineId(string? value) => RemoveWhitespace(value);
+    // Parmak izi (FP2-...) büyük harfe çevrilir; eski biçimler yalnız boşluktan arındırılır.
+    public static string MachineId(string? value)
+    {
+        var cleaned = RemoveWhitespace(value);
+        return MachineFingerprint.IsFingerprint(cleaned) ? MachineFingerprint.Format(cleaned) : cleaned;
+    }
     public static string ContactPhone(string? value) => RemoveWhitespace(value);
 
     public static bool MatchesMachine(string? licensed, string? current)
