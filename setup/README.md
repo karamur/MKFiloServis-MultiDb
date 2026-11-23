@@ -141,6 +141,11 @@ olarak çalıştırır; bu komut Web uygulamasının açılışta kullandığı 
 satırında `import --web-app <klasör>` verilebilir. Şema üretiminden sonra hâlâ karşılığı
 olmayan tablolar (EF modelinde bulunmayan eski SQLite tabloları) kaynakta boşsa atlanır,
 satır içeriyorsa aktarım veri kaybını önlemek için durdurulur.
+Mevcut hedefte yalnız `AracMasrafKalemleri` ve/veya `RolYetkiler` eksikse şema
+hazırlama yeniden çalıştırılmaz; bu SQLite kalıntıları ancak boşsa atlanır.
+Aktarımdan önce hedefi yedekleyin ve IIS uygulama havuzunu ve hedefe erişen diğer
+işlemleri durdurun. Şema hazırlama veya tablo kilidi zaman aşımına uğrarsa önce
+hedef şemayı ve açık bağlantıları kontrol edin, sonra aktarımı yeniden başlatın.
 
 ## Veritabanı ve yerel ayarlar
 

@@ -21,6 +21,11 @@ namespace MKFiloServis.DataSync.Exporters;
 /// </summary>
 public sealed class SqliteToPostgresImporter
 {
+    private static readonly HashSet<string> SqliteLegacyTables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AracMasrafKalemleri", "RolYetkiler"
+    };
+
     private readonly string _sqlitePath;
     private readonly string _pgConnectionString;
     private readonly Action<string> _progress;
@@ -57,19 +62,17 @@ public sealed class SqliteToPostgresImporter
         _progress($"▸ Hedef PG'de {pgTables.Count} tablo tespit edildi.");
 
         var atlanan = EksikTablolar(sqliteTables, pgTables);
-        if (atlanan.Count > 0 && _ensureSchema is not null)
+        var schemaMissing = atlanan.Where(t => !SqliteLegacyTables.Contains(t)).ToList();
+        if (_ensureSchema is not null && (pgTables.Count == 0 || schemaMissing.Count > 0))
         {
-            // Sema, Web uygulamasinin EF modelinden uretilir (bos hedefte baseline, mevcutta
-            // bekleyen migration'lar). Yazim gunlugu kurulumundan ONCE yapilir; aksi halde
-            // journal tablosu hedefi "bos degil" gosterip baseline'i engeller.
-            _progress($"▸ Hedefte {atlanan.Count} tablo eksik; sema olusturuluyor...");
+            _progress(pgTables.Count == 0
+                ? "▸ Hedef boş; uygulama şeması hazırlanıyor..."
+                : $"▸ Hedefte {schemaMissing.Count} uygulama tablosu eksik; şema hazırlanıyor...");
             await _ensureSchema();
             pgTables = await ListPostgresUserTablesAsync(pg);
             _progress($"▸ Hedef PG'de simdi {pgTables.Count} tablo var.");
             atlanan = EksikTablolar(sqliteTables, pgTables);
         }
-
-        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(pg);
 
         var ortakTablolar = sqliteTables
             .Where(t => pgTables.Contains(t, StringComparer.OrdinalIgnoreCase))
@@ -97,10 +100,11 @@ public sealed class SqliteToPostgresImporter
             if (veriliEksikler.Count > 0)
                 throw new InvalidOperationException(
                     $"Hedef PostgreSQL semasi gecersiz: {veriliEksikler.Count} veri iceren tablo eksik " +
-                    $"({string.Join(", ", veriliEksikler)}). Bu tablolar guncel uygulama modelinde yok; " +
-                    "kaynak veritabanini guncel surumle bir kez acip aktarimi tekrarlayin.");
+                    $"({string.Join(", ", veriliEksikler)}). Veri kaybını önlemek için aktarım durduruldu. " +
+                    "Kaynağı ve hedef şemayı güncel uygulama sürümüyle doğrulayın.");
         }
 
+        if (ortakTablolar.Count == 0) throw new InvalidOperationException("Hedefte aktarılabilir ortak tablo bulunamadı.");
         await using (var sourceIntegrity = sqlite.CreateCommand())
         {
             sourceIntegrity.Transaction = sourceSnapshot;
@@ -108,13 +112,21 @@ public sealed class SqliteToPostgresImporter
             await using var reader = await sourceIntegrity.ExecuteReaderAsync();
             if (await reader.ReadAsync()) throw new InvalidDataException($"Kaynak SQLite yabancı anahtar ihlali: {reader.GetString(0)}");
         }
+
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(pg);
         await using var tx = await pg.BeginTransactionAsync(IsolationLevel.Serializable);
-        if (pgTables.Count == 0) throw new InvalidOperationException("Hedefte aktarılabilir tablo bulunamadı.");
         await using (var tableLock = pg.CreateCommand())
         {
             tableLock.Transaction = tx;
-            tableLock.CommandText = "LOCK TABLE " + string.Join(", ", pgTables.Select(t => "public." + Quote(t))) + " IN ACCESS EXCLUSIVE MODE";
+            tableLock.CommandText = "SET LOCAL lock_timeout = '15s';";
             await tableLock.ExecuteNonQueryAsync();
+            _progress("▸ Hedef tablolar kilitleniyor (kilit başına en fazla 15 saniye)...");
+            tableLock.CommandText = "LOCK TABLE " + string.Join(", ", pgTables.Select(t => "public." + Quote(t))) + " IN ACCESS EXCLUSIVE MODE";
+            try { await tableLock.ExecuteNonQueryAsync(); }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.LockNotAvailable)
+            {
+                throw new InvalidOperationException("Hedef PostgreSQL tabloları kullanımda. IIS uygulama havuzunu ve hedefe yazan diğer işlemleri durdurup yeniden deneyin.", ex);
+            }
         }
 
         // FK tetikleyicilerini bu oturum icin devre disi birak

@@ -21,6 +21,7 @@ public static class SchemaProvisioningCli
 
     public static async Task<int> RunAsync()
     {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
         var connectionString = Environment.GetEnvironmentVariable(ConnectionEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -31,20 +32,19 @@ public static class SchemaProvisioningCli
         // Web ile aynı varsayılan: Program.cs bu anahtarı UseNpgsql'den önce true yapar.
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseNpgsql(connectionString, npgsql =>
-            {
-                npgsql.CommandTimeout(600);
-                npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-                // Web (Program.cs) ile ayni strateji: transaction/retry davranisi uretimle birebir test edilsin.
-                npgsql.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null);
-            })
-            .Options;
-
         try
         {
-            await using var context = new ApplicationDbContext(options);
             var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            builder.Options = $"{builder.Options} -c lock_timeout=15000".Trim();
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseNpgsql(builder.ConnectionString, npgsql =>
+                {
+                    npgsql.CommandTimeout(240);
+                    npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+                    npgsql.EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null);
+                })
+                .Options;
+            await using var context = new ApplicationDbContext(options);
             Console.WriteLine($"Şema hazırlanıyor: {builder.Host}:{builder.Port}/{builder.Database}");
 
             await DbInitializer.ApplyDatabaseMigrationsAsync(context);
@@ -56,6 +56,11 @@ public static class SchemaProvisioningCli
                 .SingleAsync();
             Console.WriteLine($"Şema hazır. public şemasında {tableCount} tablo var.");
             return 0;
+        }
+        catch (Exception ex) when (ex.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.LockNotAvailable })
+        {
+            Console.Error.WriteLine("HATA: Hedef PostgreSQL şeması kilitli. IIS uygulama havuzunu ve hedefi kullanan diğer işlemleri durdurup yeniden deneyin.");
+            return 1;
         }
         catch (Exception ex)
         {

@@ -11,6 +11,7 @@ internal static class CliRunner
         try
         {
             AllocConsole();
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
 
             if (args[0] is "--help" or "-h" or "/?")
             {

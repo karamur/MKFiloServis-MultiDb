@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MKFiloServis.DataSync.Exporters;
@@ -15,6 +16,7 @@ namespace MKFiloServis.DataSync.Exporters;
 /// </summary>
 public sealed class WebSchemaProvisioner
 {
+    private static readonly TimeSpan PreparationTimeout = TimeSpan.FromMinutes(5);
     private const string Switch = "--ensure-schema";
     private const string ConnectionEnvironmentVariable = "MKFILO_SCHEMA_CONNECTION";
     private const string WebAssemblyName = "MKFiloServis.Web.dll";
@@ -92,6 +94,8 @@ public sealed class WebSchemaProvisioner
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
             CreateNoWindow = true,
         };
         psi.Environment[ConnectionEnvironmentVariable] = _pgConnectionString;
@@ -113,7 +117,17 @@ public sealed class WebSchemaProvisioner
             throw new InvalidOperationException("Web uygulaması şema modu başlatılamadı.");
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        await process.WaitForExitAsync();
+        using var timeout = new CancellationTokenSource(PreparationTimeout);
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            if (!process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) when (process.HasExited) { }
+            }
+            throw new TimeoutException("Hedef şema 5 dakika içinde hazırlanamadı; veri kopyalanmadı. IIS uygulama havuzunu ve hedefi kullanan diğer işlemleri durdurup hedef şemayı kontrol edin.");
+        }
 
         if (process.ExitCode != 0)
         {
