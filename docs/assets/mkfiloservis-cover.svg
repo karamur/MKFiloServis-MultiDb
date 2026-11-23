@@ -1,0 +1,48 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-labelledby="title description">
+  <title id="title">MKFiloServis — Filo, kiralama ve servis yönetimi</title>
+  <desc id="description">Lacivert zemin üzerinde turkuaz çizgilerle çizilmiş bir filo aracı ve rota noktaları.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#0b1225"/>
+      <stop offset="1" stop-color="#153458"/>
+    </linearGradient>
+    <linearGradient id="vehicle" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#a7f3d0"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#a6c5ed" stroke-opacity=".14"/>
+    </pattern>
+    <clipPath id="frame"><rect width="1200" height="400" rx="24"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="400" fill="url(#background)"/>
+    <path d="M705 0h495v400H580z" fill="#19628b" opacity=".18"/>
+    <path d="M745 0h455v400H625z" fill="url(#grid)"/>
+    <circle cx="935" cy="207" r="146" fill="#102541" fill-opacity=".78" stroke="#7dd3fc" stroke-opacity=".3" stroke-width="2"/>
+    <circle cx="935" cy="207" r="126" fill="none" stroke="#7dd3fc" stroke-opacity=".2" stroke-dasharray="3 9"/>
+
+    <g fill="none" stroke="#7dd3fc" stroke-width="2" stroke-opacity=".65">
+      <path d="M706 285h66l31-30M1037 171l37-36h71"/>
+      <circle cx="702" cy="285" r="4" fill="#102541"/>
+      <circle cx="1149" cy="135" r="4" fill="#102541"/>
+    </g>
+    <g fill="#122d46" stroke="url(#vehicle)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M812 232v-16q0-14 15-19l18-6 25-39q9-14 26-14h78q17 0 28 14l29 39 19 6q15 5 15 19v16q0 13-13 13h-19m-52 0h-86m-52 0h-18q-13 0-13-13Z"/>
+      <path d="M855 191h174m-101-52v52m-100 25h16m190 0h16" fill="none"/>
+      <circle cx="869" cy="245" r="25"/>
+      <circle cx="1007" cy="245" r="25"/>
+    </g>
+    <circle cx="869" cy="245" r="5" fill="#a7f3d0"/>
+    <circle cx="1007" cy="245" r="5" fill="#38bdf8"/>
+
+    <g font-family="Segoe UI, system-ui, sans-serif">
+      <circle cx="75" cy="105" r="5" fill="#6ee7b7"/>
+      <text x="92" y="111" fill="#a7f3d0" font-size="19" font-weight="600" letter-spacing="3">ÇOK FİRMALI ERP</text>
+      <text x="66" y="205" fill="#f8fafc" font-size="78" font-weight="700" letter-spacing="-2">MKFiloServis</text>
+      <text x="70" y="260" fill="#cbdcf0" font-size="30">Filo, kiralama ve servis yönetimi</text>
+      <rect x="71" y="313" width="64" height="4" rx="2" fill="url(#vehicle)"/>
+    </g>
+  </g>
+</svg>

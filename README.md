@@ -1,7 +1,12 @@
 ﻿# MKFiloServis
 
+![MKFiloServis — Filo, kiralama ve servis yönetimi için çok firmalı ERP](docs/assets/mkfiloservis-cover.svg)
+
 MKFiloServis, birden fazla firmanın araçlarını, kiralama sözleşmelerini, servis operasyonlarını ve mali kayıtlarını tek bir web uygulamasında yönetmek için geliştirilmiş bir ERP sistemidir. Kullanıcının çalışabileceği kayıtlar ve modüller; etkin firma, rol yetkileri ve lisans kapsamına göre belirlenir.
 
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![Blazor](https://img.shields.io/badge/Blazor-Interactive%20Server-512BD4?logo=blazor)](https://learn.microsoft.com/aspnet/core/blazor/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Testler](https://github.com/karamur/MKFiloServis-MultiDb/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/karamur/MKFiloServis-MultiDb/actions/workflows/tests.yml)
 
 **[Windows sunucusuna kurulum](setup/README.md)** · **[Geliştirici başlangıcı](#geliştirici-başlangıcı)** · **[Yedekleme ve kurtarma](MKFiloServis.Web/DOSYA_RECOVERY_KILAVUZU.md)** · **[Güvenlik bildirimi](SECURITY.md)**
