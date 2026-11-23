@@ -1,4 +1,4 @@
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 @implements IDisposable
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
@@ -6,6 +6,7 @@
 @using MKFiloServis.Web.Services.Interfaces
 @inject MKFiloServis.Web.Services.Interfaces.IKullaniciService KullaniciService
 @inject MKFiloServis.Web.Services.LicenseService LicenseSvc
+@inject MKFiloServis.Web.Services.LicenseCache LicenseCache
 @inject MKFiloServis.Web.Services.Interfaces.IFirmaService FirmaService
 @inject MKFiloServis.Web.Services.IAktifFirmaProvider AktifFirmaProvider
 @inject MKFiloServis.Web.Services.AppAuthenticationStateProvider AuthProvider
@@ -26,12 +27,12 @@
         else
         {
             @* 🔶 DEMO MODE BANNER — Satış odaklı, korkutmaz *@
-            @if (AppMode.IsDemoMode && !LicenseSvc.HasValidLicense())
+            @if (!string.IsNullOrEmpty(lisansHataMesaji) || (AppMode.IsDemoMode && !LicenseSvc.HasValidLicense()))
             {
                 <div style="background: linear-gradient(90deg, #fef3c7, #fde68a); color: #92400e; padding: 10px 16px; text-align: center; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 12px; border-bottom: 2px solid #f59e0b;">
                     <i class="bi bi-info-circle"></i>
                     <span>
-                        <strong>Demo Mod</strong> — @(string.IsNullOrEmpty(lisansHataMesaji) ? "Deneme süreniz sona erdi." : lisansHataMesaji)
+                        <strong>Lisans Durumu</strong> — @(string.IsNullOrEmpty(lisansHataMesaji) ? "Deneme süreniz sona erdi." : lisansHataMesaji)
                         Sistemi kullanmaya devam etmek için lisans yükleyebilirsiniz.
                     </span>
                     <a href="/admin/license" class="btn btn-warning btn-sm" style="white-space: nowrap;">
@@ -248,6 +249,7 @@
     private MKFiloServis.Shared.Entities.Kullanici? aktifKullanici;
     private bool isInitialized = false;
     private string lisansHataMesaji = "";
+    private bool disposed;
     private string makineKodu = "";
     private int kalanLisansGunu = 0;
     private bool _authChecked = false;
@@ -383,7 +385,19 @@
 
     public void Dispose()
     {
+        disposed = true;
         AuthProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        LicenseCache.Changed -= OnLicenseChanged;
+    }
+
+    private void OnLicenseChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            await LisansKontrol();
+            StateHasChanged();
+        });
     }
     private async Task ToggleDarkMode()
     {
@@ -395,6 +409,7 @@
     protected override async Task OnInitializedAsync()
     {
         AuthProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        LicenseCache.Changed += OnLicenseChanged;
         try
         {
             var currentUri = Navigation.Uri;
@@ -425,45 +440,14 @@
         }
     }
 
-    private async Task LisansKontrol()
+    private Task LisansKontrol()
     {
         try
         {
             makineKodu = LicenseService.GetMachineId();
-            var lisans = await LicenseSvc.GetCurrentLicenseAsync();
-
-            if (lisans == null)
-            {
-                // Startup'ta ValidateAsync zaten çalıştı ve cache set edildi (Singleton).
-                // Cache boşsa gerçekten lisans yok demektir.
-                lisansHataMesaji = "Lisans bulunamadi. Lutfen lisans anahtarinizi girin.";
-                return;
-            }
-
-            // Negative time kontrolu
-            if (lisans != null && DateTime.UtcNow < lisans.CreatedAt)
-            {
-                lisansHataMesaji = "Sistem saati hatali. Lutfen saat ayarlarinizi kontrol edin.";
-                return;
-            }
-
-            // Demo suresi kontrolu (CreatedAt + ExpireDate cift validasyon)
-            if (lisans != null && LicenseService.IsDemoExpired(lisans))
-            {
-                var elapsed = (DateTime.UtcNow - lisans.CreatedAt).TotalDays;
-                lisansHataMesaji = $"Demo suresi {lisans.ExpireDate:dd.MM.yyyy} tarihinde doldu. ({elapsed:F0} gun)";
-                return;
-            }
-
-            // Machine lock
-            if (lisans != null &&
-                !string.IsNullOrEmpty(lisans.MachineId) &&
-                !string.Equals(lisans.MachineId, makineKodu, StringComparison.Ordinal))
-            {
-                lisansHataMesaji = "Bu lisans baska bir bilgisayar icin gecerlidir.";
-                return;
-            }
-
+            var evaluation = LicenseSvc.EvaluateCachedLicense();
+            lisansHataMesaji = evaluation.Message;
+            var lisans = LicenseCache.GetValidated();
             kalanLisansGunu = lisans != null ? LicenseService.GetRemainingDays(lisans) : 0;
         }
         catch (Exception ex)
@@ -471,6 +455,7 @@
             Logger.LogError(ex, "MainLayout lisans kontrolu sirasinda hata olustu");
             lisansHataMesaji = $"Lisans kontrolu sirasinda hata: {ex.Message}";
         }
+        return Task.CompletedTask;
     }
 
     private async Task FirmalariYukle()

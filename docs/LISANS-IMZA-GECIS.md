@@ -1,4 +1,4 @@
-# Lisans imzası v3 — Modül seçimi ve LisansDesktop üzerinden yönetim
+﻿# Lisans imzası v3 — Modül seçimi ve LisansDesktop üzerinden yönetim
 
 ## Modül lisanslama — 2026-10-02
 
@@ -8,7 +8,7 @@ Modüller: Cari, Filo ve Servis, Rent a Car, Muhasebe, Personel, Fatura ve E-Fat
 
 Ticari haklar **v3 RSA-PSS imzasına** dahil edilir. İmza zarfı `v3:<Base64 kanonik modül listesi>:<RSA imzası>` biçimindedir; Web modülleri imzalı zarftan okur. Değiştirilebilir ayrı bir Web DB sütunu/JSON alanı yetki kaynağı değildir. Web şeması değişikliği gerekmez; Desktop geçmişine `Modules` sütunu program açılışında eklenir, eski kayıtlar boş kalır. Özel anahtar ve açık anahtar aynı kalır.
 
-**Erişim = geçerli lisans + seçili modül + mevcut kullanıcı/rol yetkisi.** Admin rolü modül sınırını aşamaz. Menü, modül sayfaları/doğrudan URL, ilgili API controller'ları, evrak hub'ı, modül ayarları, ana sayfa ve genel arama kapsamında kontrol uygulanır. Açık modül sayfası lisans değişince yeniden değerlendirilir; süre/DB doğrulaması ayrıca 30 saniyede bir yapılır. Devam eden bir işlem geri alınmaz. Dosya API'si EBYS/Belgeler, personel evrak hub'ı Personel hakkını gerektirir; belge kullanan paketlerde bu hakları ayrıca seçin.
+**Erişim = girişte doğrulanan lisans hakkı + seçili modül + mevcut kullanıcı/rol yetkisi.** Admin rolü modül sınırını aşamaz. Menü, modül sayfaları/doğrudan URL, ilgili API controller'ları, evrak hub'ı, modül ayarları, ana sayfa ve genel arama lisans haklarını önbellekten okur. Süre ve veritabanı denetimi arka planda tekrarlanmaz. Dosya API'si EBYS/Belgeler, personel evrak hub'ı Personel hakkını gerektirir; belge kullanan paketlerde bu hakları ayrıca seçin.
 
 **Eski ticari v2/legacy lisanslarda modül hakkı yoktur; modül erişimi reddedilir.** Yetkili sözleşmeye göre modülleri seçip **Modüllü Yeniden Bas** işlemini kullanın; firma/makine, özgün süre/oluşturma tarihi, bitiş ve sürüm sınırı korunur. Onay penceresi seçilen modülleri gösterir. Mevcut v2 kayıt v3'e geçirilebilir; yeni `V3Reissue` geçmiş kaydı açılır. Müşteri anlaşması bilinmeden modüller topluca verilmez. Demo lisansları mevcut süre sınırı ve kullanıcı yetkileriyle tüm modülleri kapsar.
 
@@ -86,11 +86,15 @@ Bunlar önceki aşamanın geri dönüş kopyalarıdır. Harici yedekleme betiği
 
 LisansDesktop kaynak değişiklikleri derlendi. Anahtar yönetimi pencereleri, parola ile yedekleme/geri yükleme ve farklı bilgisayarda kurtarma henüz etkileşimli kabulden geçmedi. Müşteri envanteri ve müşteri lisans geçişi açık kalır; K-1 bütünüyle kapanmış değildir.
 
-## Tam makine kilidi ve doğrulama — 2026-10-02
+## Makine kimliği ve doğrulama — 2026-11-22
 
-Makine kodu donanım parçası dahil tamamen eşleşmelidir. Bilgisayar ve Windows kullanıcı adının aynı olması tek başına yeterli değildir; donanım/kurulum/kullanıcı değişiminde yeni makine koduna uygun imzalı anahtar hazırlanmalıdır. Kopyalama sırasında boşluklar temizlenir; tire ve büyük/küçük harfler korunur. Aynı anahtarın farklı kodlu makinede kullanımı kabul edilmez.
+Yeni FP2 makine kimliği bilgisayar ve Windows kullanıcı adından bağımsızdır. Dört bileşenden tek bir donanım değişimi toleranslıdır; eksik bileşenler eşleşme sayılmaz. Eski makine kimlikleri birebir karşılaştırılarak kabul edilir. Kökten farklı donanım için yeni imzalı lisans gerekir. Ana ekran, aktivasyon ve modül kontrolleri aynı politikayı kullanır; ticari bitiş günü ve 14 günlük yenileme toleransı demo süresiyle karıştırılmaz.
 
-DB'deki lisansı görüntülemek doğrulanmış modül hakkı açmaz. Tam kontrolde hata oluşursa önceki haklar temizlenir. Yeni anahtar aktivasyonu ve demo, hash yazımı sonrası yeniden doğrulanır; gelecekte oluşturulmuş anahtar aktivasyondan önce reddedilir. Bu kontrollerin çalışma zamanı kabulü henüz yapılmadı.
+DB'deki lisansı görüntülemek doğrulanmış modül hakkı açmaz. Kesin lisans reddinde haklar temizlenir; geçici DB erişim hatasında önceki doğrulanmış oturum hakları korunur, yeni giriş reddedilir. Ticari aktivasyon önce tam doğrulanır, seri transaction içinde yazılıp yeniden okunarak doğrulanır ve yalnız commit sonrası önbelleğe yayımlanır. Ret veya kayıt hatasında eski lisans korunur. Aynı anahtarın yeniden yüklenmesi mevcut satırı kullanır. Yerel saat koruma dosyası yazılamazsa uyarı kaydedilir; DB doğrulama zamanı korunur.
+
+Mevcut lisans, kullanıcı girişinde veya kayıtlı oturum geri yüklenirken tam doğrulanır. Sunucu başlangıcında ve zamanlayıcıyla doğrulama yapılmaz. Yeni anahtar veya demo aktivasyonu kendi doğrulamasını yapar; kurulumdaki `license.auto.key` bu aktivasyon akışını kullanır. Süre dolumu ve veritabanındaki lisans değişiklikleri sonraki giriş doğrulamasında görülür. Doğrulama sonucu değişirse ortak önbellek güncellenir ve açık ekranlar yeni modül haklarına göre yenilenir; devam eden işlemler geri alınmaz. Development varsayılanı tüm modülleri açar; `Licensing:EnforceInDevelopment=true` gerçek lisans politikasını uygular. Gerçek müşteri v3 anahtarı, IIS ve PostgreSQL teslim kabulü ayrıca yapılmalıdır.
+
+Önceki 2026-11-22 başlangıç doğrulamasında geçici SQLite ve ayrı depolama diziniyle Production süreci açıldı ve yeniden açıldı; `/healthz` ile `/readyz` HTTP 200 döndürdü. O testte kullanılan periyodik lisans doğrulaması artık kaldırılmıştır.
 
 ## N-1 alan sınırı — 2026-10-02
 

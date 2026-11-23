@@ -1,0 +1,122 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MK Lisans Yonetimi (LisansDesktop) - kullanici bazli MSI (yonetici yetkisi gerekmez).
+  Hedef: %LOCALAPPDATA%\Programs\MKLisans ; veriler %LOCALAPPDATA%\MKFiloServis altinda kalir.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?define UpgradeCode = "B2C3D4E5-F6A7-4901-BCDE-F12345678901" ?>
+  <?define ExeName = "MKFiloServisLisans.exe" ?>
+
+  <Package Name="MK Lisans Yonetimi"
+           Manufacturer="MK Yazilim"
+           Version="$(ProductVersion)"
+           UpgradeCode="$(UpgradeCode)"
+           Language="1055"
+           Codepage="1254"
+           Scope="perUser"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="MK Lisans Yonetimi $(ProductVersion)" Manufacturer="MK Yazilim" />
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="!(loc.DowngradeError)" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Property Id="ARPPRODUCTICON" Value="LisansIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Launch Condition="VersionNT64" Message="!(loc.Need64Bit)" />
+
+    <Icon Id="LisansIcon" SourceFile="$(PayloadDir)\LisansDesktop\$(ExeName)" />
+
+    <Feature Id="Main" Title="MK Lisans Yonetimi" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="LisansFiles" />
+      <ComponentGroupRef Id="LisansShortcuts" />
+    </Feature>
+
+    <UIRef Id="WixUI_MKLisans" />
+    <UIRef Id="LisansExitDialog" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.LaunchCheckbox)" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#LisansExe]" />
+    <CustomAction Id="LaunchLisans" DllEntry="WixShellExec" BinaryRef="Wix4UtilCA_X64" Impersonate="yes" Execute="immediate" Return="ignore" />
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="PerUserProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="MKLisans" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="LisansMenuFolder" Name="MK Lisans Yonetimi" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="LisansFiles" Directory="INSTALLFOLDER">
+      <Component Id="LisansExeComponent" Guid="5D6E7F80-91A2-4B3C-8D4E-5F6A7B8C9D01">
+        <File Id="LisansExe" Source="$(PayloadDir)\LisansDesktop\$(ExeName)" KeyPath="yes" />
+      </Component>
+      <Files Include="$(PayloadDir)\LisansDesktop\**">
+        <Exclude Files="$(PayloadDir)\LisansDesktop\$(ExeName)" />
+      </Files>
+    </ComponentGroup>
+
+    <ComponentGroup Id="LisansShortcuts" Directory="LisansMenuFolder">
+      <Component Id="LisansShortcutsComponent" Guid="6E7F8091-A2B3-4C4D-9E5F-6A7B8C9D0E12">
+        <Shortcut Id="LisansMenuShortcut" Name="!(loc.ShortcutName)" Target="[INSTALLFOLDER]$(ExeName)" WorkingDirectory="INSTALLFOLDER" Icon="LisansIcon" />
+        <Shortcut Id="LisansDesktopShortcut" Directory="DesktopFolder" Name="!(loc.ShortcutName)" Target="[INSTALLFOLDER]$(ExeName)" WorkingDirectory="INSTALLFOLDER" Icon="LisansIcon" />
+        <RemoveFolder Id="RemoveLisansMenuFolder" On="uninstall" />
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\MK Yazilim\MKLisans" Name="Version" Type="string" Value="$(ProductVersion)" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\MK Yazilim\MKLisans" Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <UI Id="LisansExitDialog">
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchLisans"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Fragment>
+
+  <!-- Basit sihirbaz: Hos geldiniz -> Ozet -> Ilerleme -> Bitti -->
+  <Fragment>
+    <UI Id="WixUI_MKLisans">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="MKLisans" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+      <DialogRef Id="VerifyReadyDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed AND NOT PATCH" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="3" Condition="Installed AND PATCH" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

@@ -102,6 +102,23 @@ Web uygulamasını yerel ortamınızın veritabanı ve gizli ayarları yapıland
 dotnet run --project .\MKFiloServis.Web\MKFiloServis.Web.csproj
 ```
 
+Alternatif olarak kökteki `start.bat` kullanılabilir. Betik kaynak projeyi Development
+ortamında derleyip başlatır; publish klasöründe ise Production olarak çalıştırır.
+5050–5069 aralığında uygun port seçilir ve tarayıcı yalnız `/healthz` başarılı olduktan
+sonra açılır. Betik ve PowerShell yardımcısı publish çıktısına da eklenir.
+
+Veritabanına veya uygulamaya dokunmadan ön kontrol:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1 -CheckOnly
+```
+
+Farklı klasör/port için `-AppPath 'C:\MKFiloServis\app' -Port 5050`, tarayıcısız
+çalıştırma için `-NoBrowser` kullanılabilir. Framework-dependent publish, .NET 10
+ASP.NET Core Runtime gerektirir; kaynak proje ayrıca uyumlu SDK gerektirir.
+Production'da `Jwt__Secret` korumalı ortam değişkeninden sağlanmalıdır; dosyaya veya
+komut satırına yazılmaz. IIS için `setup\README.md` içindeki yapılandırma yönergelerini kullanın.
+
 ### Masaüstü ve mobil uygulama olarak kurulum
 
 MKFiloServis web uygulaması PWA olarak kurulabilir. Web uygulamasını HTTPS üzerinden yayımlayın, bilgisayar veya telefonda desteklenen tarayıcıdan açın ve **Uygulamayı yükle** seçeneğini kullanın. iPhone/iPad'de Safari paylaş menüsünden **Ana Ekrana Ekle** seçilir. Masaüstünde Chrome/Edge kurulum simgesi veya tarayıcı menüsü kullanılabilir.
@@ -115,6 +132,8 @@ Kurulan uygulama aynı sunucudaki Blazor uygulamasına bağlanır; cihazda yerel
 Uygulama ayarları, ortam değişkenleri ve dağıtım profilinin desteklediği yapılandırma dosyaları üzerinden sağlanır. Başlangıç öncesinde ilgili proje ve dağıtım belgelerini inceleyin.
 
 - Veritabanı sağlayıcısını ve bağlantı ayarlarını ortama göre tanımlayın.
+- Bu satış sürümünde yalnız PostgreSQL ve SQLite çalışma zamanı desteklenir.
+- PostgreSQL hedef veritabanı, boş şema baseline işleminden önce oluşturulur; kullanıcının gerekli oluşturma yetkisi olmalıdır veya veritabanı önceden hazırlanmalıdır.
 - Kimlik doğrulama, lisanslama, e-posta ve entegrasyon sırlarını güvenli yapılandırma deposu veya ortam değişkenleriyle sağlayın.
 - Veritabanı şeması ve başlangıç verileri için projenin migration/kurulum yönergelerini izleyin.
 - Kullanıcıya gerekli firma ve modül yetkilerini tanımlayın.

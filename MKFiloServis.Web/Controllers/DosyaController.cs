@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MKFiloServis.Web.Services;
 using MKFiloServis.Web.Services.Interfaces;
@@ -39,18 +39,11 @@ public class DosyaController : ControllerBase
 
         try
         {
-            var fullPath = _archiveBrowser.ValidateStorageRelativePath(path);
-            var raw = await System.IO.File.ReadAllBytesAsync(fullPath, HttpContext.RequestAborted);
-            var isEncrypted = fullPath.EndsWith(".enc", StringComparison.OrdinalIgnoreCase);
-            var content = isEncrypted ? await _secureFileService.ReadDecryptedAsync(path, HttpContext.RequestAborted) : raw;
-            if (content == null)
-                return UnprocessableEntity("Eski şifreli dosya açılamadı. Orijinal anahtar gereklidir.");
+            var file = await _archiveBrowser.ReadFileAsync(path, HttpContext.RequestAborted);
+            if (file.Content is null)
+                return UnprocessableEntity(file.FailureMessage);
 
-            var fileName = Path.GetFileName(fullPath);
-            if (fileName.EndsWith(".enc", StringComparison.OrdinalIgnoreCase))
-                fileName = fileName[..^4];
-
-            return File(content, GetMimeType(Path.GetExtension(fileName)), fileName);
+            return File(file.Content, GetMimeType(Path.GetExtension(file.DisplayName)), file.DisplayName);
         }
         catch (UnauthorizedAccessException)
         {

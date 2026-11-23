@@ -10,6 +10,8 @@ namespace MKFiloServis.Web.Services;
 public class KullaniciService : IKullaniciService
 {
     private static readonly TimeSpan LoginLockoutDuration = TimeSpan.FromMinutes(15);
+    private const string VarsayilanYoneticiAdi = "admin";
+    private const string VarsayilanYoneticiSifresi = "Admin123";
     private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
     private readonly AppAuthenticationStateProvider _authProvider;
     private readonly ILogger<KullaniciService> _logger;
@@ -748,8 +750,8 @@ public class KullaniciService : IKullaniciService
             await EnsureRolePermissionAsync(context, SistemRolleri.Kullanici, yetkiKodu);
         }
 
-        // İlk yönetici yalnızca boş veritabanında ve açıkça sağlanan sırlarla oluşturulur.
-        // Var olan veya soft-delete edilmiş hesapların üzerine yazılmaz.
+        // İlk yönetici yalnızca boş veritabanında oluşturulur. INITIAL_ADMIN_* verilmediyse ilk giriş için
+        // varsayılan hesap kullanılır. Var olan veya soft-delete edilmiş hesapların üzerine yazılmaz.
         var herhangiBirKullaniciVar = await context.Kullanicilar
             .IgnoreQueryFilters()
             .AnyAsync();
@@ -757,15 +759,16 @@ public class KullaniciService : IKullaniciService
         {
             var adminAdi = _configuration["INITIAL_ADMIN_USERNAME"]?.Trim();
             var adminSifre = _configuration["INITIAL_ADMIN_PASSWORD"];
+            var varsayilanHesap = false;
             if (string.IsNullOrWhiteSpace(adminAdi) || string.IsNullOrWhiteSpace(adminSifre))
             {
-                _logger.LogCritical("Veritabanında kullanıcı yok. İlk yönetici için INITIAL_ADMIN_USERNAME ve INITIAL_ADMIN_PASSWORD yapılandırılmalıdır.");
-                return;
+                adminAdi = VarsayilanYoneticiAdi;
+                adminSifre = VarsayilanYoneticiSifresi;
+                varsayilanHesap = true;
             }
-
-            if (adminAdi.Length > 50 || adminSifre.Length < 12)
+            else if (adminAdi.Length > 50 || adminSifre.Length < 8)
             {
-                _logger.LogCritical("İlk yönetici oluşturulmadı: kullanıcı adı en fazla 50, parola en az 12 karakter olmalıdır.");
+                _logger.LogCritical("İlk yönetici oluşturulmadı: kullanıcı adı en fazla 50, parola en az 8 karakter olmalıdır.");
                 return;
             }
 
@@ -787,7 +790,17 @@ public class KullaniciService : IKullaniciService
                 CreatedAt = DateTime.UtcNow
             };
 
-            var sonuc = await _userManager.CreateAsync(admin, adminSifre);
+            IdentityResult sonuc;
+            if (varsayilanHesap)
+            {
+                // Varsayılan parola özel karakter kuralını karşılamaz; yalnızca bu ilk hesap için doğrudan kaydedilir.
+                admin.SifreHash = HashPassword(admin, adminSifre);
+                sonuc = await _userManager.CreateAsync(admin);
+            }
+            else
+            {
+                sonuc = await _userManager.CreateAsync(admin, adminSifre);
+            }
             if (!sonuc.Succeeded)
             {
                 _logger.LogCritical("İlk yönetici oluşturulamadı. Identity hata kodları: {Errors}",
@@ -795,7 +808,10 @@ public class KullaniciService : IKullaniciService
                 return;
             }
 
-            _logger.LogWarning("İlk yönetici hesabı yapılandırılmış sırlarla oluşturuldu. Kullanıcı adı: {UserName}", adminAdi);
+            if (varsayilanHesap)
+                _logger.LogWarning("İlk yönetici varsayılan hesapla oluşturuldu. Kullanıcı adı: {UserName}. İlk girişten sonra parolayı değiştirin.", adminAdi);
+            else
+                _logger.LogWarning("İlk yönetici hesabı yapılandırılmış sırlarla oluşturuldu. Kullanıcı adı: {UserName}", adminAdi);
         }
     }
 

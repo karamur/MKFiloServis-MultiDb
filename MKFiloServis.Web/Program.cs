@@ -28,6 +28,10 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Localization;
 
+// Başsız şema hazırlama modu (DataSync tarafından çağrılır); web sunucusu başlatılmaz.
+if (SchemaProvisioningCli.IsRequested(args))
+    return await SchemaProvisioningCli.RunAsync();
+
 // EPPlus lisans ayari (NonCommercial kullanim icin)
 ExcelPackage.License.SetNonCommercialPersonal("MKFiloServis");
 
@@ -234,7 +238,7 @@ builder.Services.AddIdentityCore<Kullanici>(options =>
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 12;
+    options.Password.RequiredLength = 8;
     options.User.RequireUniqueEmail = false;
 })
     .AddUserStore<KullaniciUserStore>();
@@ -812,7 +816,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
-static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<IServiceProvider, Task> action, bool required = true)
+static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<IServiceProvider, Task> action, bool required = true, bool ensureAudit = true)
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -821,7 +825,7 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     {
         logger.LogInformation("Startup gorevi basliyor: {TaskName}", taskName);
         await action(scope.ServiceProvider);
-        if (taskName != "MasterDatabase")
+        if (ensureAudit && taskName != "MasterDatabase")
         {
             var auditContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(auditContext.Database.GetDbConnection());
@@ -839,6 +843,13 @@ static async Task RunScopedSafeAsync(WebApplication app, string taskName, Func<I
     }
 }
 
+await RunScopedSafeAsync(app, "RuntimeDatabase", async services =>
+{
+    var runtime = services.GetRequiredService<DatabaseRuntimeInfo>();
+    if (runtime.IsPostgreSql)
+        await DbInitializer.EnsureDatabaseExistsAsync(runtime.ConnectionString);
+}, required: true, ensureAudit: false);
+
 // A genuinely empty application database is bootstrapped from the current EF model
 // before the audit journal creates its own table. Existing databases stay on migrations.
 await RunScopedSafeAsync(app, "FreshDatabaseBaseline", async services =>
@@ -852,7 +863,6 @@ await RunScopedSafeAsync(app, "MasterDatabase", async services =>
 {
     var runtime = services.GetRequiredService<DatabaseRuntimeInfo>();
     if (!runtime.IsPostgreSql) return;
-    await DbInitializer.EnsureDatabaseExistsAsync(runtime.ConnectionString);
     var configuration = services.GetRequiredService<IConfiguration>();
     await DbInitializer.EnsureMasterDatabaseAsync(configuration, runtime.ConnectionString);
 });
@@ -1514,13 +1524,6 @@ using (var scope = app.Services.CreateScope())
                 logger.LogWarning("⚠️ Auto lisans dosyasi bos: {Path}", autoLicensePath);
             }
         }
-
-        // Lisansı başlangıçta doğrula: önbellek ilk girişten önce hazır olur ve durum günlüğe yazılır.
-        var startupLicense = await licSvc.ValidateAsync();
-        if (startupLicense.IsValid)
-            logger.LogInformation("Lisans durumu: {Code}", startupLicense.Code);
-        else
-            logger.LogWarning("Lisans durumu: {Code} - {Message}", startupLicense.Code, startupLicense.Message);
     }
     catch (Exception ex)
     {
@@ -1648,6 +1651,7 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 app.Run();
+return 0;
 
 
 

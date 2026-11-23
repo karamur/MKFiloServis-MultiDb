@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
     <ProjectReference Include="..\MKFiloServis.Shared\MKFiloServis.Shared.csproj" />
@@ -70,6 +70,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\start.bat" Link="start.bat" CopyToPublishDirectory="Always" />
+    <Content Include="..\scripts\start.ps1" Link="scripts\start.ps1" CopyToPublishDirectory="Always" />
     <Content Include="Deploy\IIS\kur.bat">
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
       <Link>kur.bat</Link>
@@ -86,7 +88,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Sürüm attribute'ları (AssemblyVersion/FileVersion) publish'te /p:Version ile üretilsin;
+         lisans sürüm kontrolü (LicenseService.GetAppVersion) bu değeri okur. -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version Condition="'$(Version)' == ''">1.0.48</Version>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <!-- Swagger/OpenAPI XML dokümantasyon üretimi -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

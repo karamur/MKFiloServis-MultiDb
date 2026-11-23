@@ -1,7 +1,9 @@
-@using Microsoft.AspNetCore.Authorization
+﻿@using Microsoft.AspNetCore.Authorization
 @using System.Reflection
 @using MKFiloServis.Web.Services
 @inject LicenseService Licenses
+@inject LicenseCache Cache
+@implements IDisposable
 
 @if (allowed)
 {
@@ -29,6 +31,22 @@ else
     [Parameter] public RenderFragment? ChildContent { get; set; }
     private string[] modules = [];
     private bool allowed;
+    private bool disposed;
+    protected override void OnInitialized() => Cache.Changed += OnLicenseChanged;
+    private void OnLicenseChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (disposed) return;
+            allowed = modules.All(Licenses.HasModulePermission);
+            StateHasChanged();
+        });
+    }
+    public void Dispose()
+    {
+        disposed = true;
+        Cache.Changed -= OnLicenseChanged;
+    }
     protected override void OnParametersSet()
     {
         modules = PageType.GetCustomAttributes<AuthorizeAttribute>(true)

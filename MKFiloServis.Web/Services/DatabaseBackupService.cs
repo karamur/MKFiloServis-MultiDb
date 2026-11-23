@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using Microsoft.EntityFrameworkCore;
 using MKFiloServis.Web.Data;
 using MKFiloServis.Web.Helpers;
@@ -108,8 +108,10 @@ public class DatabaseBackupService : IHostedService, IDisposable
     /// <summary>
     /// Manuel yedekleme oluşturur
     /// </summary>
-    public async Task<BackupResult> CreateBackupAsync(string? customName = null, string? customBackupFolder = null)
+    public async Task<BackupResult> CreateBackupAsync(string? customName = null, string? customBackupFolder = null,
+        bool verifyRecoveryKeys = false, CancellationToken cancellationToken = default)
     {
+        string? backupDir = null;
         try
         {
             if (string.IsNullOrWhiteSpace(_backupPath))
@@ -124,7 +126,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
                 ? $"MKFiloServis_Backup_{timestamp}" 
                 : $"{customName}_{timestamp}";
 
-            var backupDir = Path.Combine(backupRoot, fileName);
+            backupDir = Path.Combine(backupRoot, fileName);
             Directory.CreateDirectory(backupDir);
 
             // 1. Veritabanı yedeği (PostgreSQL full dump)
@@ -137,10 +139,8 @@ public class DatabaseBackupService : IHostedService, IDisposable
             using (var scope = _scopeFactory.CreateScope())
             {
                 var protection = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
-                await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, dumpFile, CancellationToken.None);
+                await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, dumpFile, cancellationToken, verifyRecoveryKeys);
             }
-            // 5. Geçici klasörü sil
-            Directory.Delete(backupDir, true);
 
             var fileInfo = new FileInfo(zipPath);
 
@@ -153,6 +153,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
                 CreatedAt = DateTime.UtcNow
             };
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Yedekleme hatası");
@@ -161,6 +162,15 @@ public class DatabaseBackupService : IHostedService, IDisposable
                 Success = false,
                 ErrorMessage = ex.Message
             };
+        }
+        finally
+        {
+            if (backupDir is not null && Directory.Exists(backupDir))
+            {
+                try { Directory.Delete(backupDir, recursive: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                { _logger.LogWarning(ex, "Geçici veritabanı yedeği temizlenemedi: {Path}", backupDir); }
+            }
         }
     }
 

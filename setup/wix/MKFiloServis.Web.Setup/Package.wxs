@@ -1,0 +1,187 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MKFiloServis Web - MSI paketi (WiX 6)
+  * Hedef: C:\MKFiloServis\app (IIS sitesi "MKFiloServis", port 5050)
+  * Veritabani: yalnizca MEVCUT bir PostgreSQL veritabanina baglanir. Kurulum PostgreSQL
+    kurmaz, CREATE DATABASE calistirmaz, yedek yuklemez. Sema migration'lari uygulamanin
+    ilk acilisinda uygulanir.
+  * Guncelleme: ayni UpgradeCode ile MajorUpgrade; dbsettings.json MSI bileseni degildir,
+    bu yuzden guncellemede ve kaldirmada korunur.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <?define UpgradeCode = "7E4C2B51-9D3A-4C7F-8E61-2B5F0A1D9C48" ?>
+  <?define IisPort = "5050" ?>
+  <?define StorageRoot = "C:\MKFiloServis_yedekleme" ?>
+
+  <Package Name="MKFiloServis"
+           Manufacturer="MK Yazilim"
+           Version="$(ProductVersion)"
+           UpgradeCode="$(UpgradeCode)"
+           Language="1055"
+           Codepage="1254"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="MKFiloServis $(ProductVersion) Web kurulumu" Manufacturer="MK Yazilim" />
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="!(loc.DowngradeError)" />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Kurulum sihirbazinda toplanan PostgreSQL bilgileri (sadece baglanti). -->
+    <Property Id="PG_HOST" Value="localhost" />
+    <Property Id="PG_PORT" Value="5432" />
+    <Property Id="PG_DATABASE" Value="MKFiloServis" />
+    <Property Id="PG_USER" Value="postgres" />
+    <Property Id="PG_PASSWORD" Hidden="yes" />
+
+    <Property Id="ARPPRODUCTICON" Value="MKFiloIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/karamur/MKFiloServis-MultiDb" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="Disable" />
+
+    <!-- Mevcut kurulumun dbsettings.json dosyasi varsa baglanti sayfasi atlanir. -->
+    <Property Id="EXISTING_DBSETTINGS">
+      <DirectorySearch Id="ExistingAppDir" Path="[WindowsVolume]MKFiloServis\app" Depth="0">
+        <FileSearch Id="ExistingDbSettings" Name="dbsettings.json" />
+      </DirectorySearch>
+    </Property>
+
+    <Property Id="IISMAJORVERSION">
+      <RegistrySearch Id="IisMajorVersion" Root="HKLM" Key="SOFTWARE\Microsoft\InetStp" Name="MajorVersion" Type="raw" Bitness="always64" />
+    </Property>
+    <Property Id="ANCMVERSION">
+      <RegistrySearch Id="AncmVersion" Root="HKLM" Key="SOFTWARE\Microsoft\IIS Extensions\IIS AspNetCore Module V2" Name="Version" Type="raw" Bitness="always64" />
+    </Property>
+
+    <Launch Condition="Privileged" Message="!(loc.NeedAdmin)" />
+    <Launch Condition="VersionNT64" Message="!(loc.Need64Bit)" />
+
+    <Icon Id="MKFiloIcon" SourceFile="$(PayloadDir)\Web\MKFiloServis.Web.exe" />
+
+    <Feature Id="Main" Title="MKFiloServis" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="WebFiles" />
+      <ComponentGroupRef Id="DataSyncFiles" />
+      <ComponentGroupRef Id="ToolFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <UIRef Id="WixUI_MKFilo" />
+    <UIRef Id="MKFiloExitDialog" />
+
+    <!-- Kurulum sonunda uygulamayi tarayicida ac (ExitDialog onay kutusu). -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.OpenBrowserCheckbox)" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="!(loc.RecoveryBackupReminder)" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="http://localhost:$(IisPort)/" />
+    <CustomAction Id="OpenBrowser" DllEntry="WixShellExec" BinaryRef="Wix4UtilCA_X64" Impersonate="yes" Execute="immediate" Return="ignore" />
+
+    <!-- ===== Custom action'lar: StopWeb haric hepsi install-web.ps1 uzerinden (komut satirlari 255 karakter altinda tutulur).
+         Not: preprocessor define icinde &quot; cozulmedigi icin komut satiri her SetProperty'de acik yazilir. ===== -->
+    <!-- StopWeb script dosyasina bagimli degildir: guncellemede eski urunun dosyalari RemoveExistingProducts ile
+         silinmis, yenileri henuz kopyalanmamis olur. Site/havuz adi install-web.ps1 varsayilanlariyla aynidir. -->
+    <SetProperty Id="StopWeb"
+                 Value="&quot;[System64Folder]cmd.exe&quot; /c &quot;[System64Folder]inetsrv\appcmd.exe stop site /site.name:MKFiloServis &amp; [System64Folder]inetsrv\appcmd.exe stop apppool /apppool.name:MKFiloServis &amp; ping -n 4 127.0.0.1 &gt;nul&quot;"
+                 Sequence="execute" Before="StopWeb" />
+    <CustomAction Id="StopWeb" DllEntry="WixQuietExec64" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <SetProperty Id="InstallWeb"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoP -EP Bypass -File &quot;[TOOLSFOLDER]install-web.ps1&quot; -Mode Install -AppPath &quot;[INSTALLFOLDER].&quot; -Se &quot;[PG_HOST]&quot; -DbP [PG_PORT] -DbName &quot;[PG_DATABASE]&quot; -U &quot;[PG_USER]&quot; -Pw &quot;[PG_PASSWORD]&quot;"
+                 Sequence="execute" Before="InstallWeb" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT EXISTING_DBSETTINGS" />
+    <CustomAction Id="InstallWeb" DllEntry="WixQuietExec64" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="check" HideTarget="yes" />
+
+    <SetProperty Id="UpgradeWeb"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoP -EP Bypass -File &quot;[TOOLSFOLDER]install-web.ps1&quot; -Mode Upgrade -AppPath &quot;[INSTALLFOLDER].&quot;"
+                 Sequence="execute" Before="UpgradeWeb" Condition="WIX_UPGRADE_DETECTED OR EXISTING_DBSETTINGS OR (Installed AND NOT REMOVE~=&quot;ALL&quot;)" />
+    <CustomAction Id="UpgradeWeb" DllEntry="WixQuietExec64" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="check" />
+
+    <SetProperty Id="UninstallWeb"
+                 Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoP -EP Bypass -File &quot;[TOOLSFOLDER]install-web.ps1&quot; -Mode Uninstall -AppPath &quot;[INSTALLFOLDER].&quot;"
+                 Sequence="execute" Before="UninstallWeb" />
+    <CustomAction Id="UninstallWeb" DllEntry="WixQuietExec64" BinaryRef="Wix4UtilCA_X64" Execute="deferred" Impersonate="no" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- Dosyalar degistirilmeden once w3wp kilitlerini kaldir (RemoveExistingProducts sonrasi; MSI 2613 kurali). -->
+      <Custom Action="StopWeb" After="InstallInitialize" Condition="IISMAJORVERSION" />
+      <!-- Kaldirmada site/havuz silinir, dosyalar hala yerinde iken. -->
+      <Custom Action="UninstallWeb" After="StopWeb" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <!-- Yeni kurulum: dbsettings.json yazilir; guncelleme: ayarlar korunur. -->
+      <Custom Action="InstallWeb" After="InstallFiles" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT EXISTING_DBSETTINGS" />
+      <Custom Action="UpgradeWeb" After="InstallWeb" Condition="(WIX_UPGRADE_DETECTED OR EXISTING_DBSETTINGS OR (Installed AND NOT REMOVE~=&quot;ALL&quot;)) AND NOT REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Package>
+
+  <!-- ===== Dizinler ===== -->
+  <Fragment>
+    <!-- Otomatik bilesen GUID'leri standart bir kok ister; gercek hedef SetDirectory ile
+         calisma zamaninda Windows surucusune (C:\MKFiloServis) yonlendirilir. -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="MKROOT" Name="MKFiloServis">
+        <Directory Id="INSTALLFOLDER" Name="app" />
+        <Directory Id="TOOLSFOLDER" Name="tools">
+          <Directory Id="DATASYNCFOLDER" Name="datasync" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+    <SetDirectory Id="MKROOT" Value="[WindowsVolume]MKFiloServis" Sequence="both" />
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="MKFiloServis" />
+    </StandardDirectory>
+  </Fragment>
+
+  <!-- ===== Dosyalar ===== -->
+  <Fragment>
+    <ComponentGroup Id="WebFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(PayloadDir)\Web\**">
+        <Exclude Files="$(PayloadDir)\Web\dbsettings.json" />
+        <Exclude Files="$(PayloadDir)\Web\portalsettings.json" />
+        <Exclude Files="$(PayloadDir)\Web\backup_settings.json" />
+        <Exclude Files="$(PayloadDir)\Web\cookies.txt" />
+        <Exclude Files="$(PayloadDir)\Web\*.db" />
+        <Exclude Files="$(PayloadDir)\Web\*.db-shm" />
+        <Exclude Files="$(PayloadDir)\Web\*.db-wal" />
+      </Files>
+    </ComponentGroup>
+
+    <ComponentGroup Id="DataSyncFiles" Directory="DATASYNCFOLDER">
+      <Files Include="$(PayloadDir)\DataSync\**" />
+    </ComponentGroup>
+
+    <ComponentGroup Id="ToolFiles" Directory="TOOLSFOLDER">
+      <Component Id="InstallWebScript" Guid="3F1D7C2A-5B8E-4E0C-9A47-1C6D2E8B9F01">
+        <File Id="InstallWebPs1" Source="$(ScriptsDir)\install-web.ps1" KeyPath="yes" />
+      </Component>
+      <Component Id="ConfigureIisScript" Guid="8A2E6B4C-1D9F-4A3B-B7E5-6F0C3D2A1E92">
+        <File Id="ConfigureIisPs1" Source="$(SetupScriptsDir)\configure-iis-startup.ps1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts" Directory="AppMenuFolder">
+      <Component Id="StartMenuShortcuts" Guid="C5D4E3F2-A1B0-4C9D-8E7F-6A5B4C3D2E10">
+        <util:InternetShortcut Id="OpenAppShortcut" Name="!(loc.ShortcutOpenApp)" Target="http://localhost:$(IisPort)/" Type="url" IconFile="[INSTALLFOLDER]MKFiloServis.Web.exe" IconIndex="0" />
+        <Shortcut Id="DataSyncShortcut" Name="!(loc.ShortcutDataSync)" Target="[DATASYNCFOLDER]MKFiloServis.DataSync.exe" WorkingDirectory="DATASYNCFOLDER" />
+        <Shortcut Id="OpenFolderShortcut" Name="!(loc.ShortcutOpenFolder)" Target="[MKROOT]" />
+        <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\MK Yazilim\MKFiloServis" Name="Shortcuts" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="InstallInfo" Guid="D6E5F4A3-B2C1-4D0E-9F8A-7B6C5D4E3F21" Directory="INSTALLFOLDER">
+        <RegistryValue Root="HKLM" Key="Software\MK Yazilim\MKFiloServis" Name="Version" Type="string" Value="$(ProductVersion)" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\MK Yazilim\MKFiloServis" Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ExitDialog: "Uygulamayi tarayicida ac" onay kutusu -->
+  <Fragment>
+    <UI Id="MKFiloExitDialog">
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="OpenBrowser"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Fragment>
+</Wix>

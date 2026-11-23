@@ -184,7 +184,12 @@ public sealed class MainForm : Form
             }
             else
             {
-                var importer = new SqliteToPostgresImporter(_txtSqlitePath.Text, BuildConnStr(), AppendLog);
+                var webDir = ResolveWebAppDirectory();
+                var pgConn = BuildConnStr();
+                Func<Task>? ensureSchema = webDir is null
+                    ? null
+                    : () => new WebSchemaProvisioner(pgConn, webDir, AppendLog).RunAsync();
+                var importer = new SqliteToPostgresImporter(_txtSqlitePath.Text, pgConn, AppendLog, ensureSchema);
                 await Task.Run(importer.RunAsync);
             }
             MessageBox.Show(this, "Aktarim tamamlandi.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -198,6 +203,36 @@ public sealed class MainForm : Form
         {
             SetBusy(false);
         }
+    }
+
+    /// <summary>
+    /// Hedefte eksik tablo olursa semayi uretecek Web uygulamasinin klasoru. Otomatik bulunamazsa
+    /// kullanicidan istenir; vazgecilirse null doner ve eksik tablo durumunda aktarim durur.
+    /// </summary>
+    private string? ResolveWebAppDirectory()
+    {
+        var located = WebSchemaProvisioner.LocateWebAppDirectory();
+        if (located is not null)
+        {
+            AppendLog($"▸ Sema kaynagi (Web uygulamasi): {located}");
+            return located;
+        }
+
+        if (MessageBox.Show(this,
+                "MKFiloServis Web uygulamasi otomatik bulunamadi.\n\nHedef PostgreSQL'de eksik tablolar varsa sema bu uygulamanin modelinden uretilir. " +
+                "MKFiloServis.Web.dll dosyasinin bulundugu klasoru simdi secmek ister misiniz?",
+                "Web uygulamasi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return null;
+
+        using var dialog = new FolderBrowserDialog { Description = "MKFiloServis.Web.dll iceren klasoru secin", ShowNewFolderButton = false };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return null;
+        if (!WebSchemaProvisioner.IsWebAppDirectory(dialog.SelectedPath))
+        {
+            MessageBox.Show(this, "Secilen klasorde MKFiloServis.Web.dll bulunamadi.", "Web uygulamasi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+        AppendLog($"▸ Sema kaynagi (Web uygulamasi): {dialog.SelectedPath}");
+        return dialog.SelectedPath;
     }
 
     private void SetBusy(bool busy)

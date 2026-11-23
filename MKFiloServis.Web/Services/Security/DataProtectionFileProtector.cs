@@ -29,7 +29,7 @@ public sealed class DataProtectionFileProtector : IFileProtector
 
     public byte[] Unprotect(ReadOnlySpan<byte> cipher)
     {
-        if (!IsProtectedFormat(cipher))
+        if (cipher.Length <= Magic.Length || !IsProtectedFormat(cipher))
             throw new CryptographicException("Gecersiz Data Protection dosya formati.");
 
         return _protector.Unprotect(cipher[Magic.Length..].ToArray());
@@ -56,5 +56,5 @@ public sealed class DataProtectionFileProtector : IFileProtector
     }
 
     public static bool IsProtectedFormat(ReadOnlySpan<byte> content)
-        => content.Length > Magic.Length && content[..Magic.Length].SequenceEqual(Magic);
+        => content.StartsWith(Magic);
 }

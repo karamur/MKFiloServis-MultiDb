@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="tr-TR" Codepage="1254" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+  <String Id="DowngradeError" Value="Bu bilgisayarda MK Lisans Yönetimi'nin daha yeni bir sürümü kurulu. Önce onu kaldırın." />
+  <String Id="Need64Bit" Value="MK Lisans Yönetimi yalnızca 64-bit Windows üzerinde çalışır." />
+  <String Id="LaunchCheckbox" Value="MK Lisans Yönetimi'ni şimdi aç" />
+  <String Id="ShortcutName" Value="MK Lisans Yonetimi" />
+</WixLocalization>

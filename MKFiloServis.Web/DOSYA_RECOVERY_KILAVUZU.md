@@ -1,8 +1,18 @@
-# Dosya ve veritabanı kurtarma
+﻿# Dosya ve veritabanı kurtarma
 
 Bu kılavuz, güncel `RecoveryArchive` yedeğinin hazırlanması ve kontrollü geri yüklenmesi içindir. Eski `master.key` / KOA1 toplu yeniden şifreleme talimatları bu akışın parçası değildir. Yedek içindeki DataProtection key ring'i tek başına başka Windows makinesinde/profilinde çözülebilir kabul edilmez.
 
+## Sürüm yükseltme ve geri dönüşte arşiv
+
+- Varsayılan depolama kökü `C:\MKFiloServis_yedekleme` dizinidir. **Ayarlar → Arşiv Dosya Görüntüleyici** içinde `Arsiv` veya `Depo` ve ilgili alt dizini seçin. Yetkili uygulama kullanıcısı dosyayı ön izleyebilir veya indirebilir; kaynak dosya dönüştürülmez.
+- `Arsiv`, `Depo`, `uploads` ve **`keys` dizininin tamamını** birlikte koruyun. Var olan XML anahtarlarını ve varsa orijinal `master.key` dosyasını silmeyin veya üzerine yazmayın. Yeni dosyalar `MKD1` kullanmaya devam eder; yeni bir `master.key` gerekmez.
+- Yeni okuyucu, doğru anahtarlarla `MKD1`, eski `KOA1` ve eski Data Protection dosyalarını açar. Geri dönülen sürümün `MKD1` biçimini desteklemesi ve aynı depoya/anahtarlara erişmesi gerekir. `MKD1` öncesi bir sürüm yeni dosyaları doğrudan okuyamaz. Geri dönüşten önce hedef sürümde izole kopyadan her biçimde bir örnek dosya açın.
+
 ## Kurtarma yedeği oluşturma ve ön kontrol
+
+Kurulum, depolama kökü altında `Kurtarma` dizinini (varsayılan `C:\MKFiloServis_yedekleme\Kurtarma`) oluşturur. İlk yedeği yönetici olarak **Ayarlar → Yedekleme ve Kurtarma → Kurtarma Dizini Oluştur ve Yedekle** ile alın. ZIP, yerel arşivi, ayarları ve anahtar halkasını içerir. PostgreSQL dökümü ZIP içindedir; diğer sağlayıcılarda ayrı DB yedeğini de aynı dizinle birlikte kopyalayın. ZIP yayımlanmadan önce dosya sağlama toplamları, yerel evrakların Data Protection anahtar kimlikleri ve yedekten çıkarılan anahtarlarla bir kurtarma probu kontrol edilir. KOA1 kullanılıyorsa eski anahtar malzemesi bulunmalıdır; bunun taşınabilirliği için ayrıca gerçek bir KOA1 dosyası açmayı deneyin.
+
+Her yeni yedekten sonra **Kurtarma dizinini ayrı, şifreli ve erişimi kısıtlı bir ortama kopyalayın**. Kurulum boş dizini otomatik oluşturur, DB yedeği almaz veya geri yüklemez. S3 dosyaları bu yerel pakete dahil değildir. Kurulum ayarları ve dosya anahtarları hassastır; ZIP kendi başına parola korumalı değildir. IIS/ortam sırlarını ve varsa DPAPI/sertifika kurtarma malzemesini ayrıca koruyun.
 
 1. Yönetim arayüzünde **Ayarlar → Yedekleme** bölümünden tam kurtarma yedeği oluşturun. PostgreSQL için tek ZIP, `database.backup` ile dosya arşivini birlikte içerir. DB dump ve dosyalar art arda kopyalanır; aralarında yazım olursa birbirine bağlı DB/dosya durumu aynı ana ait olmayabilir. Uygulama bu işlemle otomatik bakım kipine geçmez. Tutarlı kurtarma noktası gerekiyorsa yedek öncesinde diğer uygulama ve arka plan yazımlarını bakım penceresinde durdurun.
 2. Yedek dosyasını uygulama ve kaynak depolamadan ayrı, erişimi sınırlandırılmış bir ortama kopyalayın. İçinde Production ayarları ve hassas dosyalar bulunabileceğinden ZIP'i gizli bilgi gibi koruyun; e-posta veya herkese açık dosya paylaşımıyla taşımayın.

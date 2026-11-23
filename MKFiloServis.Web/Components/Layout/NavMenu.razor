@@ -8,6 +8,7 @@
 @inject ILogger<NavMenu> Logger
 @inject BrandingService BrandingService
 @inject LicenseService ModuleLicenses
+@inject LicenseCache LicenseCache
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -985,7 +986,7 @@
                         {
                             <div class="nav-item px-3">
                                 <NavLink class="nav-link" href="ayarlar/yedekleme">
-                                    <i class="bi bi-database-down me-2"></i> Veritabani Yedekleme
+                                    <i class="bi bi-database-down me-2"></i> Yedekleme ve Kurtarma
                                 </NavLink>
                             </div>
                         }
@@ -1235,6 +1236,7 @@
         // Once subscribe ol, sonra ilk yuklemeyi yap. Aksi halde yukleme sirasinda
         // gerceklesen AuthenticationStateChanged olaylari kacirilir.
         AuthProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        LicenseCache.Changed += OnLicenseChanged;
         var branding = await BrandingService.GetAsync();
         brandingTextSrc = branding.ResolvedTextLogo;
         await YetkileriYukle();
@@ -1243,6 +1245,14 @@
     private void OnAuthStateChanged(Task<AuthenticationState> task)
     {
         _ = HandleAuthStateChangedAsync();
+    }
+
+    private void OnLicenseChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!disposed) StateHasChanged();
+        });
     }
 
     private async Task HandleAuthStateChangedAsync()
@@ -1272,6 +1282,7 @@
     {
         disposed = true;
         AuthProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        LicenseCache.Changed -= OnLicenseChanged;
     }
 
     private async Task YetkileriYukle()

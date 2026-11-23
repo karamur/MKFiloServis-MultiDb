@@ -1,9 +1,8 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Licensed:ebys")]
 @page "/ayarlar/arsiv-goruntuleyici"
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
 @using MKFiloServis.Web.Services.Interfaces
-@inject ISecureFileService SecureFileService
 @inject ArchiveBrowserService ArchiveBrowser
 @inject IToastService ToastService
 @inject IJSRuntime JS
@@ -32,8 +31,8 @@
 
     <div class="alert alert-info py-2">
         <i class="bi bi-shield-lock me-1"></i>
-        Sunucudaki uygulama dizininin <code>Depo</code> ve <code>Arşiv</code> alanları ve alt dizinleri görüntülenir. Yeni dosyalar uygulama anahtarlarıyla
-        korunur. Anahtarı bulunmayan eski şifreli dosyalar listelenir ancak açılamaz.
+        <code>Depo</code> ve <code>Arşiv</code> altından bir dizin seçin. Düz dosyalar ve anahtarı bulunan eski/yeni şifreli dosyalar
+        uygulamadan açılabilir. Dosyalar yerinde değiştirilmez.
     </div>
 
     <div class="card mb-3">
@@ -302,23 +301,8 @@
         StateHasChanged();
     }
 
-    private async Task<byte[]?> DosyaCoz(ArsivDosya dosya)
-    {
-        if (!await GoruntulemeYetkisiVarMiAsync()) return null;
-        ArchiveBrowser.ValidateStorageRelativePath(dosya.RelativePath);
-        if (dosya.Format == ArchiveFileFormat.Plain)
-            return await File.ReadAllBytesAsync(ArchiveBrowser.ValidateStorageRelativePath(dosya.RelativePath));
-
-        var bytes = await SecureFileService.ReadDecryptedAsync(dosya.RelativePath);
-        if (bytes == null || bytes.Length == 0)
-        {
-            ToastService.ShowWarning(dosya.Format is ArchiveFileFormat.LegacyAes or ArchiveFileFormat.LegacyEncrypted
-                ? "Eski şifreli dosya açılamadı. Orijinal anahtar gereklidir."
-                : "Dosya okunamadı veya uygulama anahtarı bulunamadı.");
-            return null;
-        }
-        return bytes;
-    }
+    private async Task<ArchiveFileContent?> DosyaOku(ArsivDosya dosya)
+        => await GoruntulemeYetkisiVarMiAsync() ? await ArchiveBrowser.ReadFileAsync(dosya.RelativePath) : null;
 
     private async Task<bool> GoruntulemeYetkisiVarMiAsync()
     {
@@ -339,12 +323,11 @@
 
         try
         {
-            var bytes = await DosyaCoz(dosya);
-            if (bytes == null || bytes.Length == 0)
+            var file = await DosyaOku(dosya);
+            if (file?.Content is not { Length: > 0 } bytes)
             {
-                previewError = dosya.Format is ArchiveFileFormat.LegacyAes or ArchiveFileFormat.LegacyEncrypted
-                    ? "Bu eski şifreli dosyayı açmak için orijinal anahtar gereklidir."
-                    : "Dosya okunamadı veya uygulama anahtarı bulunamadı.";
+                previewError = file is null ? "Arşiv görüntüleme yetkiniz yok."
+                    : file.Content is null ? file.FailureMessage : "Dosya boş.";
                 return;
             }
 
@@ -390,8 +373,13 @@
     {
         try
         {
-            var bytes = await DosyaCoz(dosya);
-            if (bytes == null) return;
+            var file = await DosyaOku(dosya);
+            if (file?.Content is not { Length: > 0 } bytes)
+            {
+                ToastService.ShowWarning(file is null ? "Arşiv görüntüleme yetkiniz yok."
+                    : file.Content is null ? file.FailureMessage : "Dosya boş.");
+                return;
+            }
 
             if (dosya.Uzanti == ".pdf" || dosya.Uzanti is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
             {
@@ -413,12 +401,16 @@
     {
         try
         {
-            var bytes = await DosyaCoz(dosya);
-            if (bytes == null) return;
+            var file = await DosyaOku(dosya);
+            if (file?.Content is not { } bytes)
+            {
+                ToastService.ShowWarning(file?.FailureMessage ?? "Arşiv görüntüleme yetkiniz yok.");
+                return;
+            }
 
             var mime = GetMimeType(dosya.Uzanti.TrimStart('.'));
-            await JS.InvokeVoidAsync("downloadFileFromBase64", dosya.GorunenAd, Convert.ToBase64String(bytes), mime);
-            ToastService.ShowSuccess("Dosya şifresi çözülerek indirildi.");
+            await JS.InvokeVoidAsync("downloadFileFromBase64", file.DisplayName, Convert.ToBase64String(bytes), mime);
+            ToastService.ShowSuccess("Dosya indirildi.");
         }
         catch (Exception ex)
         {

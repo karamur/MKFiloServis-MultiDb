@@ -14,7 +14,7 @@ Bu prosedürler, `CRMFiloServis.Web` uygulamasında kullanıcı girişini ve kri
 6. `Destek Ayarları` ekranı açılabilir.
 
 ## Test kullanıcısı
-Test veritabanında ayrıca oluşturulmuş, minimum 12 karakterli bir hesap kullanın. Uygulama varsayılan test hesabı oluşturmaz.
+Test veritabanında ayrıca oluşturulmuş, minimum 8 karakterli bir hesap kullanın. Uygulama varsayılan test hesabı oluşturmaz.
 
 ## Çalıştırma
 Uygulama çalışırken aşağıdaki komut kullanılabilir:

@@ -25,7 +25,7 @@ internal static class CliRunner
             return command switch
             {
                 "export" => await ExportAsync(source, target),
-                "import" => await ImportAsync(source, target),
+                "import" => await ImportAsync(source, target, GetArg(args, "--web-app")),
                 "inventory" => await LegacyInventoryRunner.RunAsync(
                     source, GetArg(args, "--provider"), GetArg(args, "--output"),
                     GetArg(args, "--source-env")),
@@ -57,17 +57,22 @@ internal static class CliRunner
         return 0;
     }
 
-    private static async Task<int> ImportAsync(string? source, string? target)
+    private static async Task<int> ImportAsync(string? source, string? target, string? webAppDirectory)
     {
         if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(target))
         {
             return Fail("--source ve --target gerekli.");
         }
 
+        var webDir = webAppDirectory ?? WebSchemaProvisioner.LocateWebAppDirectory();
+        if (webDir is not null) Console.WriteLine($"▸ Sema kaynagi (Web uygulamasi): {webDir}");
+        else Console.WriteLine("▸ Web uygulamasi bulunamadi; hedefte eksik tablo olursa aktarim durur (--web-app ile belirtin).");
+
         var importer = new SqliteToPostgresImporter(
             source!,
             target!,
-            progress: msg => Console.WriteLine(msg));
+            progress: msg => Console.WriteLine(msg),
+            ensureSchema: webDir is null ? null : () => new WebSchemaProvisioner(target!, webDir, msg => Console.WriteLine(msg)).RunAsync());
 
         await importer.RunAsync();
         Console.WriteLine("✔ Aktarim tamamlandi.");
@@ -97,7 +102,7 @@ MKFiloServis.DataSync — PostgreSQL -> SQLite veri aktarim araci
 KULLANIM:
   MKFiloServis.DataSync.exe                                  (UI modu)
   MKFiloServis.DataSync.exe export --source "<PG>" --target "<sqlite.db>"
-  MKFiloServis.DataSync.exe import --source "<sqlite.db>" --target "<PG>"
+  MKFiloServis.DataSync.exe import --source "<sqlite.db>" --target "<PG>" [--web-app "<MKFiloServis.Web klasoru>"]
   MKFiloServis.DataSync.exe inventory --provider sqlite --source "<sqlite.db>" [--output "<rapor.json>"]
   MKFiloServis.DataSync.exe inventory --provider postgresql --source-env "<baglanti-degiskeni>" [--output "<rapor.json>"]
 

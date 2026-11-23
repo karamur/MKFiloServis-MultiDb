@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Data;
@@ -1833,6 +1833,45 @@ public class BackupService : IBackupService
     // Dosya / Veri Yedeği (ZIP)
     // ─────────────────────────────────────────────────────────────────
 
+    public async Task<BackupResult> CreateRecoveryBackupAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (_serviceProvider.GetService<IObjectStorageService>() is S3ObjectStorageService)
+                throw new InvalidOperationException("S3 arşivi bu yerel pakete dahil edilemez. Nesne deposunu ayrı yedekleyin; tam kurtarma paketi oluşturulmadı.");
+            var root = RecoveryArchive.EnsureBackupDirectory(_environment.ContentRootPath, _environment.WebRootPath);
+            if (GetCurrentDatabaseProvider().Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+                return await _serviceProvider.GetRequiredService<DatabaseBackupService>()
+                    .CreateBackupAsync("FullRecovery", root, verifyRecoveryKeys: true, cancellationToken: cancellationToken);
+
+            var database = await CreateBackupAsync(root);
+            if (!database.Success) return database;
+
+            var zipPath = Path.Combine(root, $"FilesRecovery_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.zip");
+            var protection = _serviceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
+            await RecoveryArchive.CreateAsync(zipPath, _environment.ContentRootPath, protection, null, cancellationToken, verifyRecoveryKeys: true);
+            return CreateSuccessResult(zipPath);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Kurtarma dizinine doğrulanmış yedek yazılamadı.");
+            return new BackupResult { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    public IReadOnlyList<BackupInfo> GetRecoveryBackupList()
+    {
+        var root = RecoveryArchive.GetBackupDirectory(_environment.ContentRootPath);
+        if (!Directory.Exists(root)) return [];
+        root = RecoveryArchive.EnsureBackupDirectory(_environment.ContentRootPath, _environment.WebRootPath);
+        return new DirectoryInfo(root).EnumerateFiles("*.zip")
+            .Where(file => (file.Attributes & FileAttributes.ReparsePoint) == 0)
+            .OrderByDescending(file => file.LastWriteTimeUtc)
+            .Select(file => new BackupInfo { FileName = file.Name, FilePath = file.FullName,
+                FileSizeBytes = file.Length, CreatedAt = file.LastWriteTimeUtc }).ToList();
+    }
+
     public async Task<RecoveryPreparationResult> PrepareRecoveryAsync(string backupFileName, CancellationToken cancellationToken = default)
     {
         try
@@ -1841,13 +1880,15 @@ public class BackupService : IBackupService
                 || backupFileName.IndexOfAny(['/', '\\', ':', '*', '?']) >= 0
                 || !backupFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Kurtarma için listeden bir ZIP yedeği seçin.");
-            var listed = (await GetBackupListAsync()).Concat(await GetFileBackupListAsync())
+            var recoveryRoot = Path.GetFullPath(RecoveryArchive.GetBackupDirectory(_environment.ContentRootPath));
+            var listed = (await GetBackupListAsync()).Concat(await GetFileBackupListAsync()).Concat(GetRecoveryBackupList())
                 .Where(x => x.FileName == backupFileName).Select(x => Path.GetFullPath(x.FilePath))
                 .Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).ToArray();
             if (listed.Length != 1)
                 throw new InvalidDataException("Yedek bulunamadı veya aynı isimde birden fazla yedek var.");
             var backupRoot = Path.GetFullPath(GetResolvedBackupFolderPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (!listed[0].StartsWith(backupRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            if (!StorageFilePath.IsWithinRoot(recoveryRoot, listed[0], allowRoot: false)
+                && !listed[0].StartsWith(backupRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                 throw new InvalidDataException("Yedek yapılandırılmış yedek klasörü dışında.");
             var result = await RecoveryArchive.PrepareAsync(listed[0], _environment.ContentRootPath, _environment.WebRootPath, cancellationToken);
             _logger.LogInformation("İzole kurtarma dosyaları hazırlandı: {Files} dosya, anahtar probu={ProbeVerified}", result.FileCount, result.KeyProbeVerified);

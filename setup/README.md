@@ -1,61 +1,146 @@
 ﻿# MKFiloServis-MultiDb — Setup / Kurulum Paketleri
 
+Kurulum paketleri **WiX Toolset v6 + Burn** ile üretilir (1.0.48 ve sonrası).
+Inno Setup betikleri (`*.iss`) yalnızca geçiş referansı olarak tutulur; yeni paket
+üretiminde kullanılmaz.
+
 ## Gereksinimler
 
 - **.NET 10 SDK** — https://dotnet.microsoft.com/download/dotnet/10.0
-- **Inno Setup 6** — `winget install JRSoftware.InnoSetup`
-- **PowerShell 7+** (Admin olarak calistirilmali)
+- **WiX Toolset 6.0.2** (CLI) — `dotnet tool install --global wix --version 6.0.2`
+  - WiX 7 ayrı bir lisans onayı (OSMF EULA) istediği için 6.x kullanılır.
+  - Uzantılar betik tarafından otomatik eklenir: `WixToolset.UI.wixext`,
+    `WixToolset.Util.wixext`, `WixToolset.BootstrapperApplications.wixext` (6.0.2).
+- **Windows PowerShell 5.1+** (paket üretimi için yönetici gerekmez)
 
 ## Hizli Baslangic
 
-```cmd
-cd setup
-make.cmd <surum>
-```
-
-veya PowerShell ile:
-
 ```powershell
-.\build.ps1 -Version <surum>
+cd setup
+.\build-wix.ps1 -Version 1.0.48
 ```
 
-## Uretilen Paketler
+Seçenekler: `-SkipPublish` (mevcut `payload/` kullanılır), `-LisansOnly`
+(yalnız lisans aracı MSI'ı), `-SkipLisans`.
+
+## Uretilen Paketler (`setup/output/v<sürüm>/`)
 
 | Dosya | Aciklama |
 |-------|----------|
-| `MKFiloServisKurulum-<sürüm>.exe` | Yeni müşteri için IIS sunucu kurulumu (Web + DataSync); lisans üretim aracı içermez |
-| `MKFiloServisGuncelle-<sürüm>.exe` | Güncelleme paketi |
-| `MKFiloServisKurulumMusteri-<sürüm>.exe` | Eski doğrudan çalıştırma varyantı; ACL koruması tamamlanana kadar yeni satışta üretilmez/dağıtılmaz |
-| `MKLisansArac-<sürüm>.exe` | Yalnızca dahili lisans üretim akışında oluşturulur |
-| `MKFiloServisMasaustu-<sürüm>.exe` | Windows masaüstü istemcisi (ayrı build) |
+| `MKFiloServisKurulum-<sürüm>.exe` | **Burn bundle** — yeni sunucu kurulumu: .NET 10 Hosting Bundle (IIS/ANCM) + Web MSI. Mevcut PostgreSQL'e bağlanır |
+| `MKFiloServisGuncelle-<sürüm>.exe` | **Burn bundle** — yalnızca Web MSI; mevcut kurulum şarttır, `dbsettings.json` korunur |
+| `MKFiloServis.Web-<sürüm>.msi` | Bundle'ların içindeki Web + DataSync MSI'ı. **Tek başına kurulursa Hosting Bundle (ANCM) kurulmaz**; IIS'te `500.19 / 0x8007000d` alınırsa Kurulum bundle'ı çalıştırın |
+| `MKLisansArac-<sürüm>.msi` | Lisans üretim aracı; **kullanıcı bazlı** kurulum (`%LocalAppData%\Programs\MKLisans`), yönetici gerekmez |
+| `MKFiloServisMasaustu-<sürüm>.exe` | Windows masaüstü istemcisi (ayrı build, `build-client.ps1`) |
 | `MKFiloServisAndroid-<sürüm>.apk` | Android istemcisi (ayrı build) |
-
-## Parametreler
-
-| Parametre | Aciklama |
-|-----------|----------|
-| `-Version` | Dağıtım sürümü (belirtilmesi önerilir; script varsayılanı 1.0.47) |
-| `-SkipPublish` | Publish atla, sadece Inno Setup calistir |
-| `-LisansOnly` | Sadece lisans araci EXE'si uret |
-| `-IncludeInternalLicenseTool` | Sunucu paketleriyle birlikte ayrıca dahili lisans aracını üret; müşteri kurulumuna eklemez |
 
 ## Klasor Yapisi
 
 ```
 setup/
-  build.ps1          — Ana build script'i
+  build-wix.ps1      — Ana paket üretim betiği (publish + WiX + Burn)
   build-client.ps1   — Windows masaustu ve Android istemcileri
-  make.cmd           — Cift tikla calistirma
-  Setup.iss          — Tam kurulum (Inno Setup)
-  GuncelleSetup.iss  — Guncelleme paketi
-  MusteriSetup.iss   — Eski dogrudan calistirma varyanti (yeni satis build'inde yok)
-  LisansSetup.iss    — Lisans araci
-  DesktopSetup.iss   — Windows masaustu istemcisi
-  scripts/           — IIS yapilandirma PowerShell script'leri
-  assets/            — Gorsel dosyalari (ikon, banner)
+  wix/
+    MKFiloServis.Web.Setup/     — Web MSI (Package.wxs, WixUI_MKFilo.wxs, tr-TR .wxl)
+    MKFiloServis.Lisans.Setup/  — Lisans aracı MSI (kullanıcı bazlı)
+    MKFiloServis.Bundle.Shared/ — Kurulum/Güncelle bundle'ının ortak kaynağı (IncludeHosting=1/0)
+    scripts/install-web.ps1     — MSI custom action'larının çalıştırdığı IIS/dbsettings betiği
+    obj/                        — Ara dosyalar (.gitignore'da)
+  scripts/           — IIS yapilandirma PowerShell script'leri (configure-iis-startup.ps1 pakete dahil edilir)
+  build.ps1, *.iss   — Eski Inno Setup akışı (referans; yeni üretimde kullanılmaz)
   payload/           — Publish ciktilari (gecici, .gitignore'da)
-  output/            — Uretilen EXE'ler (.gitignore'da)
+  redist/            — dotnet-hosting-10.0-win.exe (.gitignore'da; yoksa betik indirir)
+  output/            — Uretilen MSI/EXE'ler (.gitignore'da)
 ```
+
+## Kurulum akışı (Kurulum bundle)
+
+1. Ön koşullar: 64-bit Windows, yönetici hakkı.
+2. Web MSI: Hoş geldiniz → **PostgreSQL bağlantı** sayfası (sunucu, port, veritabanı,
+   kullanıcı, parola) → özet → dosyalar `C:\MKFiloServis\app` ve `C:\MKFiloServis\tools`
+   altına kopyalanır → `install-web.ps1 -Mode Install` çalışır: IIS yoksa `dism` ile
+   etkinleştirir, `MKFiloServis` uygulama havuzu ve 5050 portlu siteyi oluşturur,
+   `dbsettings.json` dosyasını yazar ve ACL'sini SYSTEM/Administrators/uygulama havuzu
+   ile sınırlar, `configure-iis-startup.ps1` ile `Jwt__Secret` ve depolama klasörlerini hazırlar.
+3. Hosting Bundle: IIS + ANCM + ASP.NET Core 10 çalışma zamanı yoksa kurulur; çalışma
+   zamanı IIS'ten önce kurulmuşsa ANCM'nin kaydolması için `/repair` ile çalıştırılır.
+4. Son sayfadaki onay kutusu `http://localhost:5050/` adresini tarayıcıda açar.
+
+Kurulum depolama kökünde erişimi sınırlandırılmış `Kurtarma` dizinini oluşturur
+(varsayılan `C:\MKFiloServis_yedekleme\Kurtarma`). Kurulum sonunda gösterilen
+uyarıya göre **Ayarlar → Yedekleme ve Kurtarma** ekranından ilk yedeği alın ve
+dizini ayrı, şifreli bir ortamda saklayın. Kurulum kendi başına yedek almaz.
+
+Kurulum **PostgreSQL kurmaz, veritabanı oluşturmaz ve yedek yüklemez**; yalnızca
+önceden hazırlanmış PostgreSQL veritabanına bağlanır. Boş bir veritabanı verilirse
+şema ilk açılışta uygulama tarafından (EF baseline + migration'lar) üretilir.
+Sunucuya TCP erişimi
+kurulum sırasında denenir, erişilemezse bağlantı bilgileri yine de yazılır ve günlüğe
+uyarı düşülür (`C:\MKFiloServis\app\logs\install-web.log`). Parola komut satırıyla
+aktarıldığından `"` içeremez ve `\` ile bitemez.
+
+MSI custom action'ları `install-web.ps1` betiğini çalıştırır; yalnızca site/havuzu
+durduran `StopWeb` eylemi dosyadan bağımsız olarak doğrudan `appcmd` çağırır (güncellemede
+eski ürünün dosyaları silinmiş, yenileri henüz kopyalanmamış olur). Betikte `-Db` gibi
+PowerShell ortak parametre takma adlarıyla (`-Debug` → `db`) çakışan parametre adı
+kullanılamaz; aksi halde betik hiçbir modda yüklenmez ve MSI 1603 ile geri alınır.
+
+## Güncelleme akışı (Güncelle bundle)
+
+- Mevcut bir kurulum (WiX MSI ya da eski Inno kurulumu) ve ANCM + ASP.NET Core 10
+  çalışma zamanı bulunmazsa bundle çalışmayı reddeder.
+- Site/uygulama havuzu durdurulur, dosyalar yenilenir, `install-web.ps1 -Mode Upgrade`
+  IIS ayarlarını yeniden uygular, site başlatılır.
+- `dbsettings.json`, `portalsettings.json`, `backup_settings.json` MSI bileşeni
+  değildir; güncelleme ve kaldırmada korunur. Mevcut `dbsettings.json` varsa
+  PostgreSQL sayfası gösterilmez.
+- Güncelleme IIS havuzundaki mevcut `CRMFILO_STORAGE_ROOT` değerini korur ve
+  arşiv dosyalarını veya anahtarlarını yeniden yazmaz. Yapılandırılmış dizin
+  erişilemiyorsa güncelleme başka bir depoya geçmek yerine hata verir.
+- Aynı sürümün üzerine yeniden kurulum (onarım amaçlı) desteklenir; sürüm düşürme
+  engellenir.
+
+## Kaldırma
+
+IIS sitesi ve uygulama havuzu silinir; `C:\MKFiloServis\app` içindeki ayar/günlük
+dosyaları, `C:\MKFiloServis_yedekleme` ve PostgreSQL veritabanı yerinde bırakılır.
+
+## IIS kurulumunda ilk giriş
+
+Lisansın etkin olması bir kullanıcı hesabı oluşturmaz. Kullanıcı tablosu boş olan yeni
+bir veritabanında uygulama ilk açılışta Admin rolünde varsayılan hesabı oluşturur:
+kullanıcı adı `admin`, parola `Admin123`. **İlk girişten sonra parolayı
+Ayarlar → Profil → Şifre Değiştir bölümünden değiştirin**; değiştirilene kadar uygulamaya
+erişebilen herkes bu bilinen parolayla yönetici olarak girebilir. Yeni parola en az
+8 karakter olmalı ve büyük harf, küçük harf, rakam ve özel karakter içermelidir.
+`test` hesabı yalnızca yerel Development SQLite ortamında otomatik oluşturulur.
+Mevcut veritabanını bağladıysanız mevcut hesabınızla giriş yapın; silinmiş hesaplar
+dahil herhangi bir kullanıcı kaydı varsa varsayılan hesap oluşturulmaz. Eski hesaplar
+bir SQLite dosyasındaysa Veri Aktarım aracını kullanarak hesaplar dahil verileri
+planlanan PostgreSQL hedefine taşıyın.
+
+Varsayılan hesap yerine kendi ilk yöneticinizi istiyorsanız, uygulama ilk kez açılmadan
+önce yönetici olarak IIS
+yapılandırma düzenleyicisinden `system.applicationHost/applicationPools` altında
+`MKFiloServis` havuzunun `environmentVariables` koleksiyonuna `INITIAL_ADMIN_USERNAME`
+ve `INITIAL_ADMIN_PASSWORD` ekleyin. Kullanıcı adı en fazla 50 karakter; parola en az
+8 karakter olmalı ve büyük harf, küçük harf, rakam ve özel karakter içermelidir.
+Havuzu yeniden başlatıp uygulamayı açın. İlk giriş başarılı olduktan sonra iki
+değişkeni kaldırın ve havuzu yeniden başlatın. Başarısız olursa sunucu başlangıç
+günlüğünde `SeedAdmin` çıktısını kontrol edin.
+
+## Veri Aktarım (DataSync) ile SQLite → PostgreSQL
+
+`C:\MKFiloServis\tools` altındaki DataSync aracı SQLite verisini PostgreSQL'e kopyalar.
+Hedefte tablo yoksa aracı **kendisi üretir**: `MKFiloServis.Web.exe --ensure-schema`
+komutunu (bağlantı dizesi `MKFILO_SCHEMA_CONNECTION` ortam değişkeniyle) alt süreç
+olarak çalıştırır; bu komut Web uygulamasının açılışta kullandığı aynı yolu izler
+(boş veritabanında EF baseline + migration geçmişi, aksi halde bekleyen migration'lar,
+`FisNoCounters` şeması). Web uygulaması klasörü otomatik bulunur (kayıt defterindeki
+`InstallPath`, `..\app`, `C:\MKFiloServis\app`); bulunamazsa arayüz klasör sorar, komut
+satırında `import --web-app <klasör>` verilebilir. Şema üretiminden sonra hâlâ karşılığı
+olmayan tablolar (EF modelinde bulunmayan eski SQLite tabloları) kaynakta boşsa atlanır,
+satır içeriyorsa aktarım veri kaybını önlemek için durdurulur.
 
 ## Veritabanı ve yerel ayarlar
 
@@ -72,16 +157,11 @@ eski makineden taşınırken birlikte korunmalıdır.
 Uygulama seçilen sağlayıcıda ortak veritabanı kullanır; firma kapsamı kayıtların
 `FirmaId` bağıyla korunur. Her firma için otomatik ayrı veritabanı oluşturulmaz.
 
-Ana ve müşteri kurulum sihirbazları PostgreSQL veya SQLite bağlantısını alıp
-`dbsettings.json` dosyasını hedefte oluşturur. Ana IIS paketinde bu dosyanın ACL'si
-SYSTEM/Administrators ve uygulama havuzu ile sınırlandırılır; SQLite veri klasörüne
-uygulama havuzunun yazma izni verilir. Müşteri doğrudan çalıştırma paketinde aynı ACL
-koruması henüz yoktur; hedef makinede dosya erişimi doğrulanmadan bu varyant
-dağıtıma kabul edilmez. SQL Server/MSSQL bu satış sürümünde desteklenmez.
-Temiz kurulum paketi mevcut uygulama veya DB ayarı olan hedefi reddeder.
-Güncelleme paketi kurulu ana/müşteri varyantının gerçek dizinini bulur ve
-`dbsettings.json` ayarını korur; iki varyant aynı makinede kuruluysa hedef
-belirsizliği nedeniyle durur.
+Kurulum sihirbazı PostgreSQL bağlantısını alıp `dbsettings.json` dosyasını hedefte
+oluşturur (Provider=PostgreSQL). Dosyanın ACL'si SYSTEM/Administrators ve uygulama
+havuzu ile sınırlandırılır. SQL Server/MSSQL desteklenmez; SQLite yalnızca
+`dbsettings.json` elle düzenlenerek kullanılabilir.
+Güncelleme paketi mevcut kurulumun üzerine yazar ve `dbsettings.json` ayarını korur.
 
 `dbsettings.json`, `portalsettings.json` ve `backup_settings.json` kurulumun
 çalışma zamanı dosyalarıdır. Kaynak depoya ve publish/kurulum paketine alınmazlar;
@@ -91,7 +171,7 @@ güncelleyen operatör, çekmeden önce yerel ayarlarının yedeğini almalıdı
 `-SkipPublish` ile eski payload kullanılırsa paket betiği bu dosyaları bulduğunda
 işlemi durdurur.
 Ortama özel `appsettings.*.json` dosyaları da Web publish/kurulum paketine alınmaz;
-eski payload'da bulunurlarsa `setup/build.ps1` paketlemeyi reddeder. Pakette yalnız
+eski payload'da bulunurlarsa `setup/build-wix.ps1` paketlemeyi reddeder. Pakette yalnız
 sır içermeyen temel `appsettings.json` yer alır.
 
 `Jwt__Secret` en az 32 baytlık rastgele üretim sırrıdır. Tam kurulum sihirbazı bunu

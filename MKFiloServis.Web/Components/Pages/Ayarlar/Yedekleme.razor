@@ -1,4 +1,4 @@
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+﻿@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 @page "/ayarlar/yedekleme"
 @using MKFiloServis.Web.Helpers
 @using MKFiloServis.Web.Services
@@ -60,6 +60,27 @@
             <small class="text-muted d-block mt-2">PostgreSQL tam kurtarma yedeği DB ve dosyaları tek doğrulanmış ZIP'te toplar. DB dump ve dosya kopyası art arda alınır; birbirine bağlı verilerde tutarlılık için diğer yazımları bakım penceresinde durdurun. Bu işlem uygulamayı bakım kipine almaz.</small>
         </div>
     </div>
+
+    <section class="alert alert-warning mb-4" aria-label="Kurtarma dizini">
+        <h4 class="h5">Kurtarma dizini ve anahtar yedeği</h4>
+        <p class="mb-2">Sunucudaki dizin: <code>@RecoveryArchive.GetBackupDirectory(Environment.ContentRootPath)</code></p>
+        <p class="mb-2">Düğme dizini oluşturur ve veritabanı, yerel arşivler, ayarlar ve anahtarlarla birlikte kurtarma yedeği alır. PostgreSQL'de tek ZIP üretilir; diğer sağlayıcılarda veritabanı yedeği ayrı dosyadır.</p>
+        <p><strong>Yedekten sonra Kurtarma dizinini şifreli bir harici diske veya erişimi sınırlı ayrı bir ortama kopyalayın.</strong> Aynı diskte bırakmak disk arızasına karşı korumaz. ZIP anahtar ve hassas ayarlar içerir; doğrulama başka makinede açılabilirliği garanti etmez.</p>
+        <button class="btn btn-warning" @onclick="KurtarmaYedegiAl" disabled="@IsAnyOperationInProgress">
+            @(isCreatingRecoveryBackup ? "Yedek alınıyor ve doğrulanıyor…" : "Kurtarma Dizini Oluştur ve Yedekle")
+        </button>
+        @if (recoveryBackup?.Success == true)
+        {
+            <div class="mt-2" role="status">Doğrulanan ZIP: <code>@recoveryBackup.FileName</code></div>
+        }
+        @foreach (var backup in recoveryBackups)
+        {
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                <code>@backup.FileName</code>
+                <button class="btn btn-sm btn-outline-dark" @onclick="() => KurtarmaHazirla(backup)" disabled="@IsAnyOperationInProgress">Kurtarma Hazırla</button>
+            </div>
+        }
+    </section>
 
     <!-- Veritabani Bilgisi -->
     <div class="row mb-4">
@@ -503,6 +524,9 @@
 
 @code {
     private RecoveryPreparationResult? recoveryPreparation;
+    private BackupResult? recoveryBackup;
+    private IReadOnlyList<BackupInfo> recoveryBackups = [];
+    private bool isCreatingRecoveryBackup;
     private bool isPreparingRecovery;
     private List<BackupInfo> backups = new();
     private BackupSettings settings = new();
@@ -535,6 +559,35 @@
         await YedekleriYenile();
     }
 
+    private async Task KurtarmaYedegiAl()
+    {
+        if (IsAnyOperationInProgress) return;
+        isCreatingRecoveryBackup = true;
+        recoveryBackup = null;
+        try
+        {
+            recoveryBackup = await BackupService.CreateRecoveryBackupAsync();
+            if (recoveryBackup.Success)
+            {
+                KurtarmaListesiniYenile();
+                ToastService.ShowSuccess("Kurtarma yedeği doğrulandı. Kurtarma dizinini ayrı bir ortama kopyalayın.");
+            }
+            else
+                ToastService.ShowError($"Kurtarma yedeği oluşturulamadı: {recoveryBackup.ErrorMessage}");
+        }
+        finally { isCreatingRecoveryBackup = false; }
+    }
+
+    private void KurtarmaListesiniYenile()
+    {
+        try { recoveryBackups = BackupService.GetRecoveryBackupList(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            recoveryBackups = [];
+            ToastService.ShowError($"Kurtarma dizini okunamadı: {ex.Message}");
+        }
+    }
+
     private async Task KurtarmaHazirla(BackupInfo backup)
     {
         if (IsAnyOperationInProgress) return;
@@ -562,6 +615,7 @@
             var dbBackups = await BackupService.GetBackupListAsync();
             var fileBackups = await BackupService.GetFileBackupListAsync();
             backups = dbBackups.Concat(fileBackups).OrderByDescending(b => b.CreatedAt).ToList();
+            KurtarmaListesiniYenile();
         }
         finally
         {
@@ -941,7 +995,7 @@
         }
     }
 
-    private bool IsAnyOperationInProgress => isPreparingRecovery || isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
+    private bool IsAnyOperationInProgress => isCreatingRecoveryBackup || isPreparingRecovery || isBackingUp || isFileBackup || isFullBackup || isRestoring || isUploading || isMigrating || isDonusuyor;
 
     private static bool CanRestore(string fileName)
     {

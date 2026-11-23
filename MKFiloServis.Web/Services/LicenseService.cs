@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Licensing;
 using MKFiloServis.Web.Data;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
@@ -234,7 +235,16 @@ public class LicenseService
 
     private void WriteLastSeenUtc(DateTime utc)
     {
-        var payload = _stateProtector.Protect(utc.Ticks.ToString(CultureInfo.InvariantCulture));
+        string payload;
+        try
+        {
+            payload = _stateProtector.Protect(utc.Ticks.ToString(CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Yerel lisans saat koruması yazılamadı; veritabanındaki doğrulama zamanı korunuyor.");
+            return;
+        }
         foreach (var path in StatePaths())
         {
             try
@@ -283,15 +293,17 @@ public class LicenseService
 
     private LicenseValidationResult FailValidation(MKFiloServis.Shared.Licensing.LicenseStatusCode code, string message)
     {
-        _cache.Clear();
+        _cache.Clear(new MKFiloServis.Shared.Licensing.LicenseEvaluation { Code = code, Message = message });
         return LicenseValidationResult.Fail(code, message);
     }
 
-    private MKFiloServis.Shared.Licensing.LicenseValidationContext BuildContext(LicenseInfo? lic)
+    private MKFiloServis.Shared.Licensing.LicenseValidationContext BuildContext(LicenseInfo? lic, DateTime? databaseLastSeen = null)
     {
         var lastSeen = ReadLastSeenUtc();
         if (lic?.LastValidatedAt is { } validated && (lastSeen is null || validated > lastSeen))
             lastSeen = validated;
+        if (databaseLastSeen is { } databaseSeen && (lastSeen is null || databaseSeen > lastSeen))
+            lastSeen = databaseSeen;
 
         return new MKFiloServis.Shared.Licensing.LicenseValidationContext
         {
@@ -307,10 +319,24 @@ public class LicenseService
 
     public async Task<LicenseValidationResult> ValidateAsync(bool persistValidation = true)
     {
+        await _cache.ValidationGate.WaitAsync();
+        try
+        {
+            return await ValidateCoreAsync(persistValidation);
+        }
+        finally
+        {
+            _cache.ValidationGate.Release();
+        }
+    }
+
+    private async Task<LicenseValidationResult> ValidateCoreAsync(bool persistValidation)
+    {
         // Development ortamında varsayılan olarak sahte lisans döner (EnforceInDevelopment ile kapatılabilir).
         if (UseDevelopmentBypass)
         {
             var mockLicense = await GetCurrentLicenseAsync();
+            _cache.Set(mockLicense!, DevelopmentEvaluation());
             return LicenseValidationResult.Ok(mockLicense!);
         }
 
@@ -367,9 +393,9 @@ public class LicenseService
             }
 
             // Doğrulanan modül kümesi önbelleğe alınır; yetki sorguları artık RSA çalıştırmaz.
-            _cache.Set(lic, validated: true, modules: evaluation.Modules);
+            _cache.Set(lic, evaluation);
 
-            return LicenseValidationResult.Ok(lic);
+            return LicenseValidationResult.Ok(lic, evaluation.Code, evaluation.Message);
         }
         catch (Exception ex)
         {
@@ -496,8 +522,64 @@ public class LicenseService
                 _logger.LogWarning("Lisans sure tutarsizligi: DurationDays={Days}, tarih farki={Expected}", lic.DurationDays, expectedDays);
         }
 
-        // DB'ye kaydet — eski lisanslari pasif yap
-        await using var db = await _dbFactory.CreateDbContextAsync();
+        await _cache.ValidationGate.WaitAsync();
+        try
+        {
+            await using var strategyDb = await _dbFactory.CreateDbContextAsync();
+            var source = lic;
+            var commitStarted = false;
+            var activated = await strategyDb.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            {
+                if (commitStarted)
+                    throw new InvalidOperationException("Lisans aktivasyonunun commit sonucu belirsiz. Lisans durumunu kontrol edip anahtarı yeniden yükleyin.");
+
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+                var candidate = new LicenseInfo
+                {
+                    FirmaKodu = source.FirmaKodu,
+                    MachineId = source.MachineId,
+                    ExpireDate = source.ExpireDate,
+                    DurationDays = source.DurationDays,
+                    IsDemo = source.IsDemo,
+                    AllowedVersion = source.AllowedVersion,
+                    CreatedAt = source.CreatedAt,
+                    ContactPhone = source.ContactPhone,
+                    Signature = source.Signature,
+                    IsActive = true
+                };
+                var databaseLastSeen = await db.LicenseInfos.IgnoreQueryFilters()
+                    .MaxAsync(l => l.LastValidatedAt);
+                var evaluation = MKFiloServis.Shared.Licensing.LicenseValidator.Evaluate(candidate, BuildContext(candidate, databaseLastSeen));
+                if (!evaluation.IsValid)
+                    throw new InvalidOperationException(evaluation.Message);
+
+                candidate = await StoreActivatedLicenseAsync(db, candidate);
+                await db.Entry(candidate).ReloadAsync();
+                evaluation = MKFiloServis.Shared.Licensing.LicenseValidator.Evaluate(candidate, BuildContext(candidate, databaseLastSeen));
+                if (!evaluation.IsValid)
+                    throw new InvalidOperationException(evaluation.Message);
+
+                commitStarted = true;
+                await transaction.CommitAsync();
+                return (License: candidate, Evaluation: evaluation);
+            });
+
+            _cache.Set(activated.License, activated.Evaluation);
+            WriteLastSeenUtc(DateTime.UtcNow);
+            MKFiloServis.Shared.AppMode.ExitDemoMode();
+            _logger.LogInformation("✅ Lisans aktive edildi (key): {FirmaKodu}, Bitis: {ExpireDate}",
+                activated.License.FirmaKodu, activated.License.ExpireDate);
+            return activated.License;
+        }
+        finally
+        {
+            _cache.ValidationGate.Release();
+        }
+    }
+
+    private async Task<LicenseInfo> StoreActivatedLicenseAsync(ApplicationDbContext db, LicenseInfo lic)
+    {
 
         // Mevcut kurulumda firma kodu eşleşmiyorsa lisansı başka firmaya bağlama.
         // Yalnızca henüz hiç firma kaydı olmayan temiz kurulum lisans bilgisiyle ilk firmayı kurabilir.
@@ -563,14 +645,6 @@ public class LicenseService
             db.LicenseInfos.Add(lic);
         }
         await db.SaveChangesAsync();
-
-        // DB cache güncelle — lisans anında okunur
-        await db.Entry(lic).ReloadAsync();
-        await PublishValidatedLicenseAsync(lic);
-        MKFiloServis.Shared.AppMode.ExitDemoMode(); // 🔥 KRİTİK: Demo moddan çık
-
-        _logger.LogInformation("✅ Lisans aktive edildi (key): {FirmaKodu}, Bitis: {ExpireDate}",
-            lic.FirmaKodu, lic.ExpireDate);
 
         return lic;
     }
@@ -934,7 +1008,6 @@ public class LicenseService
                 LastValidatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            _cache.Set(mockLicense);
             return mockLicense;
         }
 
@@ -950,8 +1023,6 @@ public class LicenseService
             .OrderByDescending(l => l.UpdatedAt ?? l.CreatedAt)
             .ThenByDescending(l => l.Id)
             .FirstOrDefaultAsync();
-        if (lic != null)
-            _cache.Set(lic);
         return lic;
     }
 
@@ -964,6 +1035,20 @@ public class LicenseService
         // 🔥 Singleton LicenseCache'e delege et — DB sorgusu yapma.
         return _cache.HasValidLicense();
     }
+
+    public LicenseEvaluation EvaluateCachedLicense() => UseDevelopmentBypass
+        ? DevelopmentEvaluation()
+        : _cache.GetEvaluation() ?? new LicenseEvaluation
+        {
+            Code = LicenseStatusCode.NotFound,
+            Message = "Lisans henüz doğrulanmadı. Doğrulamak için giriş yapın."
+        };
+
+    private static LicenseEvaluation DevelopmentEvaluation() => new()
+    {
+        Code = LicenseStatusCode.Ok,
+        Modules = new HashSet<string>(LicenseModules.All.Keys, StringComparer.Ordinal)
+    };
 
     public async Task SaveLicenseAsync(LicenseInfo lic)
     {
@@ -1017,27 +1102,8 @@ public class LicenseService
 
         if (!MKFiloServis.Shared.Licensing.LicenseModules.All.ContainsKey(moduleName)) return false;
 
-        // Modül kümesi tam doğrulama anında çıkarılıp önbelleğe alınır; burada RSA çalıştırılmaz.
-        var snapshot = _cache.GetSnapshot();
-        if (snapshot is null) return false;
-
-        var lic = snapshot.License;
-        if (!lic.IsActive || lic.IsDeleted) return false;
-
-        // Süre uzun süren sunucularda dolabileceğinden her sorguda ucuz zaman kontrolü yapılır.
-        var now = DateTime.UtcNow;
-        if (lic.IsDemo)
-        {
-            if (IsDemoExpired(lic)) return false;
-        }
-        else if (now > MKFiloServis.Shared.Licensing.LicenseValidator.EffectiveExpiry(lic))
-        {
-            var grace = lic.LastValidatedAt.HasValue &&
-                now - MKFiloServis.Shared.Licensing.LicenseValidator.EffectiveExpiry(lic) <= TimeSpan.FromDays(14);
-            if (!grace) return false;
-        }
-
-        return snapshot.Modules.Contains(moduleName);
+        // Modül kontrolleri lisansı yeniden doğrulamaz; girişte belirlenen hakları kullanır.
+        return _cache.GetSnapshot()?.Modules.Contains(moduleName) == true;
     }
 
     public bool HasLicensedPermission(string permission)
@@ -1092,7 +1158,8 @@ public class LicenseValidationResult
     public string Message { get; set; } = string.Empty;
     public LicenseInfo? License { get; set; }
 
-    public static LicenseValidationResult Ok(LicenseInfo lic) => new() { IsValid = true, Code = MKFiloServis.Shared.Licensing.LicenseStatusCode.Ok, License = lic };
+    public static LicenseValidationResult Ok(LicenseInfo lic, MKFiloServis.Shared.Licensing.LicenseStatusCode code = MKFiloServis.Shared.Licensing.LicenseStatusCode.Ok, string message = "")
+        => new() { IsValid = true, Code = code, Message = message, License = lic };
     public static LicenseValidationResult Fail(MKFiloServis.Shared.Licensing.LicenseStatusCode code, string msg) => new() { IsValid = false, Code = code, Message = msg };
     public static LicenseValidationResult Unavailable(string msg) => new() { IsValid = false, IsTransientFailure = true, Code = MKFiloServis.Shared.Licensing.LicenseStatusCode.Unavailable, Message = msg };
 }

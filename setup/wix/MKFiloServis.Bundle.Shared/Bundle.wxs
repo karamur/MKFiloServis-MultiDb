@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MKFiloServis Burn bundle (ortak kaynak).
+  IncludeHosting=1 -> Kurulum paketi: ASP.NET Core Hosting Bundle 10.0 + Web MSI
+  IncludeHosting=0 -> Guncelleme paketi: yalnizca Web MSI (mevcut kurulum ve Hosting Bundle sart)
+
+  Zincir sirasi: Web MSI once calisir (IIS ozelliklerini etkinlestirir, siteyi kurar),
+  ardindan Hosting Bundle kurulur/onarilir. Hosting Bundle IIS'ten once kurulmussa
+  ANCM kaydi icin /repair gerekir; bu durum HostingArgs degiskeniyle ele alinir.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <?define BundleUpgradeCode = "0D9E8F7A-6B5C-4D3E-A2F1-9C8B7A6D5E40" ?>
+  <?define WebUpgradeCode = "7E4C2B51-9D3A-4C7F-8E61-2B5F0A1D9C48" ?>
+  <?define AspNetCoreVersion = "10.0.15" ?>
+
+  <?if $(IncludeHosting) = 1 ?>
+    <?define BundleName = "MKFiloServis $(ProductVersion) Kurulum" ?>
+  <?else?>
+    <?define BundleName = "MKFiloServis $(ProductVersion) Guncelleme" ?>
+  <?endif?>
+
+  <Bundle Name="$(BundleName)"
+          Manufacturer="MK Yazilim"
+          Version="$(ProductVersion)"
+          UpgradeCode="$(BundleUpgradeCode)"
+          AboutUrl="https://github.com/karamur/MKFiloServis-MultiDb"
+          Compressed="yes">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense"
+                                              LicenseUrl=""
+                                              SuppressOptionsUI="yes"
+                                              SuppressRepair="yes"
+                                              ShowVersion="yes" />
+    </BootstrapperApplication>
+
+    <!-- Tespitler -->
+    <util:RegistrySearch Id="IisMajorVersion" Variable="IisInstalled" Root="HKLM" Key="SOFTWARE\Microsoft\InetStp" Value="MajorVersion" Result="exists" Bitness="always64" />
+    <util:RegistrySearch Id="AncmInstalled" Variable="AncmInstalled" Root="HKLM" Key="SOFTWARE\Microsoft\IIS Extensions\IIS AspNetCore Module V2" Value="Version" Result="exists" Bitness="always64" />
+    <util:RegistrySearch Id="AspNetCoreRuntime" Variable="AspNetCoreInstalled" Root="HKLM" Key="SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.AspNetCore.App" Value="$(AspNetCoreVersion)" Result="exists" Bitness="always32" />
+    <util:ProductSearch Id="WebInstalled" Variable="WebInstalledVersion" UpgradeCode="$(WebUpgradeCode)" Result="version" />
+    <util:RegistrySearch Id="InnoInstalled" Variable="InnoInstallPath" Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\A1B2C3D4-E5F6-7890-ABCD-EF1234567890-USTUN_is1" Value="InstallLocation" Result="value" Bitness="always64" />
+
+    <Variable Name="HostingArgs" Value="/install" />
+    <!-- Runtime var ama IIS/ANCM yoksa: IIS etkinlestikten sonra hosting paketini onar. -->
+    <SetVariable Id="HostingRepair" Variable="HostingArgs" Value="/repair" Condition="AspNetCoreInstalled" />
+
+    <bal:Condition Condition="VersionNT64" Message="MKFiloServis yalnizca 64-bit Windows uzerinde kurulabilir." />
+    <bal:Condition Condition="Privileged" Message="Kurulum icin yonetici yetkisi gereklidir." />
+    <?if $(IncludeHosting) = 0 ?>
+      <bal:Condition Condition="WixBundleInstalled OR WebInstalledVersion OR InnoInstallPath" Message="Mevcut bir MKFiloServis kurulumu bulunamadi. Once MKFiloServisKurulum paketini calistirin." />
+      <bal:Condition Condition="WixBundleInstalled OR (AncmInstalled AND AspNetCoreInstalled)" Message="ASP.NET Core 10 Hosting Bundle bulunamadi. Guncelleme yerine MKFiloServisKurulum paketini calistirin." />
+    <?endif?>
+
+    <Chain>
+      <MsiPackage Id="WebMsi"
+                  SourceFile="$(MsiDir)\MKFiloServis.Web-$(ProductVersion).msi"
+                  bal:DisplayInternalUICondition="1"
+                  Vital="yes"
+                  Visible="no" />
+
+      <?if $(IncludeHosting) = 1 ?>
+      <ExePackage Id="DotnetHosting"
+                  DisplayName="ASP.NET Core 10.0 Hosting Bundle"
+                  SourceFile="$(RedistDir)\dotnet-hosting-10.0-win.exe"
+                  Permanent="yes"
+                  Vital="yes"
+                  Cache="remove"
+                  DetectCondition="IisInstalled AND AncmInstalled AND AspNetCoreInstalled"
+                  InstallArguments="[HostingArgs] /quiet /norestart"
+                  RepairArguments="/repair /quiet /norestart">
+        <ExitCode Value="0" Behavior="success" />
+        <ExitCode Value="1638" Behavior="success" />
+        <ExitCode Value="3010" Behavior="scheduleReboot" />
+        <ExitCode Behavior="error" />
+      </ExePackage>
+      <?endif?>
+    </Chain>
+  </Bundle>
+</Wix>
+

@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using Npgsql;
 using NpgsqlTypes;
 using System;
@@ -14,7 +14,8 @@ namespace MKFiloServis.DataSync.Exporters;
 
 /// <summary>
 /// SQLite veritabanindaki tum tablolari okuyup PostgreSQL hedefine aktarir.
-/// Sema hedef PostgreSQL'de zaten olmalidir. Bu sinif sadece VERI kopyalar.
+/// Hedef semada eksik tablo varsa ve bir sema hazirlayici verilmisse (Web uygulamasinin
+/// EF modeli), once sema hazirlanir; aksi halde islem durdurulur. Bu sinif kendisi DDL uretmez.
 /// FK bakimindan session_replication_role=replica ile tek transaction kullanir,
 /// aktarim sonrasi identity sequence'lari MAX(Id)'ye gore resetler.
 /// </summary>
@@ -23,12 +24,14 @@ public sealed class SqliteToPostgresImporter
     private readonly string _sqlitePath;
     private readonly string _pgConnectionString;
     private readonly Action<string> _progress;
+    private readonly Func<Task>? _ensureSchema;
 
-    public SqliteToPostgresImporter(string sqlitePath, string pgConnectionString, Action<string>? progress = null)
+    public SqliteToPostgresImporter(string sqlitePath, string pgConnectionString, Action<string>? progress = null, Func<Task>? ensureSchema = null)
     {
         _sqlitePath = sqlitePath;
         _pgConnectionString = pgConnectionString;
         _progress = progress ?? (_ => { });
+        _ensureSchema = ensureSchema;
     }
 
     public async Task RunAsync()
@@ -46,7 +49,6 @@ public sealed class SqliteToPostgresImporter
 
         await using var pg = new NpgsqlConnection(_pgConnectionString);
         await pg.OpenAsync();
-        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(pg);
 
         var sqliteTables = await ListSqliteUserTablesAsync(sqlite, sourceSnapshot);
         _progress($"▸ Kaynak SQLite'da {sqliteTables.Count} tablo tespit edildi.");
@@ -54,27 +56,49 @@ public sealed class SqliteToPostgresImporter
         var pgTables = await ListPostgresUserTablesAsync(pg);
         _progress($"▸ Hedef PG'de {pgTables.Count} tablo tespit edildi.");
 
+        var atlanan = EksikTablolar(sqliteTables, pgTables);
+        if (atlanan.Count > 0 && _ensureSchema is not null)
+        {
+            // Sema, Web uygulamasinin EF modelinden uretilir (bos hedefte baseline, mevcutta
+            // bekleyen migration'lar). Yazim gunlugu kurulumundan ONCE yapilir; aksi halde
+            // journal tablosu hedefi "bos degil" gosterip baseline'i engeller.
+            _progress($"▸ Hedefte {atlanan.Count} tablo eksik; sema olusturuluyor...");
+            await _ensureSchema();
+            pgTables = await ListPostgresUserTablesAsync(pg);
+            _progress($"▸ Hedef PG'de simdi {pgTables.Count} tablo var.");
+            atlanan = EksikTablolar(sqliteTables, pgTables);
+        }
+
+        await MKFiloServis.Shared.Auditing.DatabaseWriteAudit.EnsureAsync(pg);
+
         var ortakTablolar = sqliteTables
             .Where(t => pgTables.Contains(t, StringComparer.OrdinalIgnoreCase))
             .ToList();
         _progress($"▸ Kopyalanacak tablo sayisi: {ortakTablolar.Count}");
 
         // Sema on kosulu: Kaynakta var ama hedefte olmayan tablolar veri kaybi yaratir.
-        // Sessizce atlanmak yerine islem durdurulur.
-        var atlanan = sqliteTables.Except(ortakTablolar, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Kaynakta bos olan (eski SQLite kalintisi) tablolar bilgi notuyla atlanir;
+        // satir iceren tablolar icin islem durdurulur.
         if (atlanan.Count > 0)
         {
+            var veriliEksikler = new List<string>();
             foreach (var t in atlanan)
             {
-                _progress($"  ⚠ PG'de karsiligi yok, ATLANDI: {t}");
-                Console.Error.WriteLine($"[UYARI] Kaynakta var ama hedefte eksik, ATLANDI: {t}");
+                if (await KaynakSatirSayisiAsync(sqlite, sourceSnapshot, t) == 0)
+                {
+                    _progress($"  ℹ Hedef modelde yok, kaynakta bos — atlandi: {t}");
+                    continue;
+                }
+                veriliEksikler.Add(t);
+                _progress($"  ⚠ PG'de karsiligi yok ve kaynakta veri var: {t}");
+                Console.Error.WriteLine($"[UYARI] Kaynakta veri var ama hedefte tablo yok: {t}");
             }
 
-            throw new InvalidOperationException(
-                $"Hedef PostgreSQL semasi gecersiz: {atlanan.Count} tablo eksik " +
-                $"({string.Join(", ", atlanan)}). Hedef semayi guncelleyip aktarimi tekrarlayin.");
+            if (veriliEksikler.Count > 0)
+                throw new InvalidOperationException(
+                    $"Hedef PostgreSQL semasi gecersiz: {veriliEksikler.Count} veri iceren tablo eksik " +
+                    $"({string.Join(", ", veriliEksikler)}). Bu tablolar guncel uygulama modelinde yok; " +
+                    "kaynak veritabanini guncel surumle bir kez acip aktarimi tekrarlayin.");
         }
 
         await using (var sourceIntegrity = sqlite.CreateCommand())
@@ -133,6 +157,20 @@ public sealed class SqliteToPostgresImporter
 
         _progress($"✔ Toplam {toplamSatir} satir kopyalandi.");
     }
+
+    private static async Task<long> KaynakSatirSayisiAsync(SqliteConnection conn, SqliteTransaction sourceTx, string tablo)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = sourceTx;
+        cmd.CommandText = $"SELECT COUNT(*) FROM \"{tablo}\";";
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+    }
+
+    private static List<string> EksikTablolar(List<string> sqliteTables, List<string> pgTables) =>
+        sqliteTables
+            .Where(t => !pgTables.Contains(t, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static async Task<List<string>> ListSqliteUserTablesAsync(SqliteConnection conn, SqliteTransaction sourceTx)
     {

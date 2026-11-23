@@ -6,10 +6,11 @@
 #define LisansPublisher "MK Yazilim"
 #define LisansURL       "https://github.com/karamur/MKFiloServis-MultiDb"
 #define LisansExe       "MKFiloServisLisans.exe"
-#define LisansInstallDir "C:\MKLisans"
+; PrivilegesRequired=lowest ile uyumlu: kullanici profili altina kurulur.
+#define LisansInstallDir "{localappdata}\Programs\MKLisans"
 
 #ifndef LisansAppVersion
-#define LisansAppVersion "1.0.37"
+#define LisansAppVersion "1.0.48"
 #endif
 
 [Setup]
@@ -54,7 +55,7 @@ Name: "{app}\data"
 [Icons]
 Name: "{group}\{#LisansAppName}"; Filename: "{app}\{#LisansExe}"; WorkingDir: "{app}"
 Name: "{group}\Kaldir"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\{#LisansAppName}"; Filename: "{app}\{#LisansExe}"; WorkingDir: "{app}"
+Name: "{userdesktop}\{#LisansAppName}"; Filename: "{app}\{#LisansExe}"; WorkingDir: "{app}"
 
 [Run]
 Filename: "{app}\{#LisansExe}"; Description: "Lisans aracini hemen ac"; Flags: postinstall nowait skipifsilent shellexec

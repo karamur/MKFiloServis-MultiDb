@@ -1,4 +1,5 @@
 ﻿using MKFiloServis.Shared.Entities;
+using MKFiloServis.Shared.Licensing;
 
 namespace MKFiloServis.Web.Services;
 
@@ -17,7 +18,9 @@ public class LicenseCache
     private IReadOnlySet<string> _modules = NoModules;
     private LicenseInfo? _cachedLicense;
     private bool _validated;
+    private LicenseEvaluation? _evaluation;
     public event Action? Changed;
+    internal SemaphoreSlim ValidationGate { get; } = new(1, 1);
 
     /// <summary>Cache'teki lisansı getir/set et (thread-safe).</summary>
     public LicenseInfo? Get()
@@ -31,6 +34,11 @@ public class LicenseCache
         lock (_lock) return _validated ? _cachedLicense : null;
     }
 
+    public LicenseEvaluation? GetEvaluation()
+    {
+        lock (_lock) return _evaluation;
+    }
+
     /// <summary>Tam doğrulanmış lisans ve modülleri; doğrulanmamışsa null.</summary>
     public LicenseSnapshot? GetSnapshot()
     {
@@ -38,29 +46,35 @@ public class LicenseCache
     }
 
     /// <summary>Cache'i güncelle (thread-safe).</summary>
-    public void Set(LicenseInfo lic, bool validated = false, IReadOnlySet<string>? modules = null)
+    public void Set(LicenseInfo lic, LicenseEvaluation evaluation)
     {
+        if (!evaluation.IsValid)
+            throw new ArgumentException("Yalnızca geçerli lisans önbelleğe alınabilir.", nameof(evaluation));
+
         bool changed;
         lock (_lock)
         {
-            changed = _cachedLicense?.Signature != lic.Signature || _cachedLicense?.IsActive != lic.IsActive || _validated != validated;
+            changed = _cachedLicense?.Signature != lic.Signature || _evaluation?.Code != evaluation.Code ||
+                _evaluation?.Message != evaluation.Message || !_modules.SetEquals(evaluation.Modules);
             _cachedLicense = lic;
-            _validated = validated;
-            _modules = validated ? modules ?? NoModules : NoModules;
+            _validated = true;
+            _evaluation = evaluation;
+            _modules = evaluation.Modules;
         }
         if (changed) Changed?.Invoke();
     }
 
     /// <summary>Cache'i temizle (uygulama başlangıcında DB'den yeniden doğrulamak için).</summary>
-    public void Clear()
+    public void Clear(LicenseEvaluation? failure = null)
     {
         bool changed;
         lock (_lock)
         {
-            changed = _cachedLicense != null || _validated;
+            changed = _cachedLicense != null || _validated || _evaluation?.Code != failure?.Code || _evaluation?.Message != failure?.Message;
             _cachedLicense = null;
             _modules = NoModules;
             _validated = false;
+            _evaluation = failure;
         }
         if (changed) Changed?.Invoke();
     }

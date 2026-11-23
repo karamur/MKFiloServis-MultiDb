@@ -11,7 +11,7 @@
     Internal license utility is built only with -LisansOnly or -IncludeInternalLicenseTool.
 
 .PARAMETER Version
-    Paket versiyon numarasi. Varsayilan 1.0.47
+    Paket versiyon numarasi. Varsayilan 1.0.48
 
 .PARAMETER SkipPublish
     Publish atlanir, sadece Inno Setup calistirilir.
@@ -28,7 +28,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Version = '1.0.47',
+    [string] $Version = '1.0.48',
     [switch] $SkipPublish,
     [switch] $LisansOnly,
     [switch] $IncludeInternalLicenseTool

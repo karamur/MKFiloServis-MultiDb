@@ -1,4 +1,4 @@
-using MKFiloServis.Shared.Entities;
+﻿using MKFiloServis.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -710,6 +710,14 @@ ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
 
     public static async Task<bool> InitializeFreshDatabaseBaselineIfEmptyAsync(ApplicationDbContext context)
     {
+        // EnableRetryOnFailure etkinken (PostgreSQL/SQL Server/MySQL) kullanici tarafindan acilan transaction
+        // yalnizca execution strategy icinde calistirilabilir; aksi halde EF InvalidOperationException firlatir.
+        var strategy = context.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(() => InitializeFreshDatabaseBaselineCoreAsync(context));
+    }
+
+    private static async Task<bool> InitializeFreshDatabaseBaselineCoreAsync(ApplicationDbContext context)
+    {
         await using var transaction = await context.Database.BeginTransactionAsync();
         if (!await HasNoApplicationTablesAsync(context))
         {
@@ -755,6 +763,8 @@ ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;";
         catch
         {
             await transaction.RollbackAsync();
+            // Yeniden denemede seed kayitlarinin ikinci kez eklenmemesi icin izlenen varliklari birak.
+            context.ChangeTracker.Clear();
             throw;
         }
     }

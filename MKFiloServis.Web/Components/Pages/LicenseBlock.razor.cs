@@ -18,8 +18,8 @@ public partial class LicenseBlock
         _machineCode = LicenseService.GetMachineId();
 
         var lic = await LicenseService.GetCurrentLicenseAsync();
-        var validation = await LicenseService.ValidateAsync(persistValidation: false);
-        _isDemoExpired = lic is { IsDemo: true } && validation.Code == MKFiloServis.Shared.Licensing.LicenseStatusCode.DemoExpired;
+        var validation = LicenseService.EvaluateCachedLicense();
+        _isDemoExpired = validation.Code == MKFiloServis.Shared.Licensing.LicenseStatusCode.DemoExpired;
         _contactPhone = lic?.ContactPhone;
 
         _message = validation.IsValid

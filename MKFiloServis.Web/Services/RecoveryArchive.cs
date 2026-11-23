@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
@@ -20,6 +20,20 @@ internal static class RecoveryArchive
         string KeyRecoveryRequirement, List<FileRecord> Files);
     private const long MaxExpandedBytes = 100L * 1024 * 1024 * 1024;
     private const int MaxFileCount = 100_000;
+
+    public static string GetBackupDirectory(string contentRoot)
+        => Path.Combine(AppStoragePaths.GetStorageRoot(contentRoot), "Kurtarma");
+
+    public static string EnsureBackupDirectory(string contentRoot, string? webRoot)
+    {
+        var root = Path.GetFullPath(GetBackupDirectory(contentRoot));
+        if (StorageFilePath.IsWithinRoot(webRoot ?? Path.Combine(contentRoot, "wwwroot"), root))
+            throw new IOException("Kurtarma dizini web kökünde olamaz.");
+        EnsureNoLinks(root);
+        Directory.CreateDirectory(root);
+        RestrictDirectory(root);
+        return root;
+    }
 
     /// <summary>Güvenilir yedeği yeni, kapalı bir kurtarma klasörüne hazırlar; canlı hedeflere yazmaz.</summary>
     public static async Task<RecoveryPreparationResult> PrepareAsync(string path, string contentRoot, string? webRoot, CancellationToken ct)
@@ -64,17 +78,7 @@ internal static class RecoveryArchive
                 await JsonSerializer.SerializeAsync(output, manifest, cancellationToken: ct);
             var keys = Path.Combine(staging, "storage", "keys");
             bool probeVerified;
-            try
-            {
-                // Ayrı DI/anahtar halkası: çalışan uygulamanın anahtarlarıyla yanlış pozitif oluşmaz.
-                var services = new ServiceCollection();
-                services.AddLogging();
-                services.AddDataProtection().SetApplicationName("MKFiloServis")
-                    .PersistKeysToFileSystem(new DirectoryInfo(keys)).DisableAutomaticKeyGeneration();
-                using var isolated = services.BuildServiceProvider();
-                var protector = isolated.GetRequiredService<IDataProtectionProvider>().CreateProtector(ProbePurpose);
-                probeVerified = protector.Unprotect(manifest.ProtectedProbe) == ProbeValue;
-            }
+            try { probeVerified = VerifyKeyProbe(keys, manifest.ProtectedProbe); }
             catch (Exception ex) when (ex is CryptographicException or InvalidOperationException or IOException or UnauthorizedAccessException or System.Xml.XmlException or ArgumentException)
             {
                 probeVerified = false;
@@ -103,6 +107,17 @@ internal static class RecoveryArchive
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows()
         ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static bool VerifyKeyProbe(string keys, string protectedProbe)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection().SetApplicationName("MKFiloServis")
+            .PersistKeysToFileSystem(new DirectoryInfo(keys)).DisableAutomaticKeyGeneration();
+        using var isolated = services.BuildServiceProvider();
+        return isolated.GetRequiredService<IDataProtectionProvider>().CreateProtector(ProbePurpose)
+            .Unprotect(protectedProbe) == ProbeValue;
+    }
 
     private static void EnsureNoLinks(string path)
     {
@@ -148,7 +163,7 @@ internal static class RecoveryArchive
     }
 
     public static async Task CreateAsync(string destination, string contentRoot,
-        IDataProtectionProvider protection, string? databaseDump, CancellationToken ct)
+        IDataProtectionProvider protection, string? databaseDump, CancellationToken ct, bool verifyRecoveryKeys = false)
     {
         var storageRoot = AppStoragePaths.GetStorageRoot(contentRoot);
         var target = Path.GetFullPath(destination);
@@ -202,10 +217,61 @@ internal static class RecoveryArchive
                 }
                 output.Flush(flushToDisk: true);
             }
-            await VerifyAsync(temporary, ct);
+            using (var archive = ZipFile.OpenRead(temporary))
+            {
+                var manifest = await VerifyArchiveAsync(archive, ct);
+                if (verifyRecoveryKeys)
+                    await VerifyRecoveryKeysAsync(archive, manifest, Path.GetDirectoryName(target)!, ct);
+            }
             File.Move(temporary, destination, overwrite: false);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static async Task VerifyRecoveryKeysAsync(ZipArchive archive, Manifest manifest, string directory, CancellationToken ct)
+    {
+        const string prefix = "storage/keys/";
+        var entries = manifest.Files.Where(file => file.Path.StartsWith(prefix, StringComparison.Ordinal))
+            .ToDictionary(file => file.Path, StringComparer.OrdinalIgnoreCase);
+        var hasLegacyMasterKey = new[] { "master.key", "master.key.import", "raw-key.txt", "raw-key.txt.bak", "master.key.raw", "master.key.txt" }
+            .Any(name => entries.TryGetValue(prefix + name, out var file) && file.Length > 0);
+        byte[] header = new byte[24];
+        foreach (var file in manifest.Files.Where(file =>
+                     file.Path.StartsWith("storage/Arsiv/", StringComparison.Ordinal) ||
+                     file.Path.StartsWith("storage/Depo/", StringComparison.Ordinal) ||
+                     file.Path.StartsWith("storage/uploads/", StringComparison.Ordinal) ||
+                     file.Path.StartsWith("application/wwwroot/", StringComparison.Ordinal)))
+        {
+            await using var input = archive.GetEntry(file.Path)!.Open();
+            var read = await input.ReadAtLeastAsync(header, header.Length, false, ct);
+            var bytes = header.AsSpan(0, read);
+            if (bytes.StartsWith("KOA1"u8) && !hasLegacyMasterKey)
+                throw new InvalidDataException("KOA1 dosyaları var, ancak yedekte eski anahtar malzemesi yok. Orijinal anahtarı kurtarın.");
+            var payload = bytes.StartsWith("MKD1"u8) ? bytes[4..] : bytes;
+            if (payload.StartsWith(new byte[] { 0x09, 0xF0, 0xC9, 0xF0 }))
+            {
+                if (payload.Length < 20 || !entries.ContainsKey($"{prefix}key-{new Guid(payload.Slice(4, 16)):D}.xml"))
+                    throw new InvalidDataException("En az bir şifreli dosyanın Data Protection anahtarı yedekte yok. Önce eski anahtar halkasını kurtarın.");
+            }
+            else if (bytes.StartsWith("MKD1"u8))
+                throw new InvalidDataException("En az bir MKD1 dosyasının şifreleme başlığı geçersiz.");
+        }
+
+        var probeDirectory = Path.Combine(directory, ".key-probe-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(probeDirectory);
+        try
+        {
+            foreach (var file in entries.Values.Where(file => file.Path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                         && !file.Path[prefix.Length..].Contains('/')))
+            {
+                await using var input = archive.GetEntry(file.Path)!.Open();
+                await using var output = File.Create(Path.Combine(probeDirectory, Path.GetFileName(file.Path)));
+                await input.CopyToAsync(output, ct);
+            }
+            if (!VerifyKeyProbe(probeDirectory, manifest.ProtectedProbe))
+                throw new InvalidDataException("Yedekteki anahtarlarla kurtarma probu çözülemedi.");
+        }
+        finally { Directory.Delete(probeDirectory, recursive: true); }
     }
 
     public static async Task VerifyAsync(string path, CancellationToken ct)

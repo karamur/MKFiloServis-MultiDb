@@ -1,9 +1,10 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 public interface ISecureFileService
 {
     Task<string> SaveEncryptedAsync(string relativeDirectory, string originalFileName, byte[] content, CancellationToken cancellationToken = default);
     Task<byte[]?> ReadDecryptedAsync(string? relativePath, CancellationToken cancellationToken = default);
+    byte[]? DecryptContent(string relativePath, byte[] encryptedContent);
     /// <summary>
     /// Removes the active file path after checking database references. Unreferenced
     /// encrypted content is retained in recoverable quarantine; it is not purged.

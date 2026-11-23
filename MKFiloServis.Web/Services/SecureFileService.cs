@@ -1,4 +1,4 @@
-using MKFiloServis.Web.Helpers;
+﻿using MKFiloServis.Web.Helpers;
 using MKFiloServis.Web.Services.Security;
 using Microsoft.AspNetCore.DataProtection;
 using System.Security.Cryptography;
@@ -123,13 +123,13 @@ public sealed class SecureFileService : ISecureFileService
             return null;
 
         var rawContent = await ReadRawAsync(relativePath, cancellationToken);
-        if (rawContent == null)
-            return null;
+        return rawContent is null ? null : DecryptContent(relativePath, rawContent);
+    }
 
+    public byte[]? DecryptContent(string relativePath, byte[] rawContent)
+    {
         var dataProtectionFormat = DataProtectionFileProtector.IsProtectedFormat(rawContent);
-        var koa1Format = rawContent.Length >= 5 &&
-                         rawContent[0] == (byte)'K' && rawContent[1] == (byte)'O' &&
-                         rawContent[2] == (byte)'A' && rawContent[3] == (byte)'1';
+        var koa1Format = rawContent.AsSpan().StartsWith("KOA1"u8);
 
         // 1) Yeni format: MKD1 + ASP.NET Core Data Protection
         if (dataProtectionFormat)

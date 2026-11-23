@@ -1011,16 +1011,15 @@ public class MainForm : Form
         }
 
         var machineText = NormalizeMachineId(txtMachine.Text);
-        if (machineText.StartsWith("FP2", StringComparison.OrdinalIgnoreCase)
-            && !MKFiloServis.Shared.Licensing.MachineFingerprint.IsFingerprint(machineText))
+        var isFingerprint = MKFiloServis.Shared.Licensing.MachineFingerprint.IsFingerprint(machineText);
+        if (!isFingerprint && machineText.StartsWith("FP2", StringComparison.OrdinalIgnoreCase))
         {
             MessageBox.Show("Makine kodu eksik veya hatalı kopyalanmış. Beklenen biçim: FP2-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX",
                 "Geçersiz Makine Kodu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
 
-        var normalizedMachine = NormalizeMachineId(txtMachine.Text);
-        if (!normalizedMachine.Contains('_'))
+        if (!isFingerprint && !machineText.Contains('_'))
         {
             var devam = MessageBox.Show(
                 "Machine ID beklenen formatta gorunmuyor (MAKINE_KULLANICI_KOD).\nWeb uygulamasindaki makine kodunu birebir kopyaladiginizdan emin olun.\n\nYine de devam edilsin mi?",

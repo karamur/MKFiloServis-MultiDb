@@ -1,4 +1,4 @@
-@page "/setup"
+﻿@page "/setup"
 @layout EmptyLayout
 @attribute [AllowAnonymous]
 @using MKFiloServis.Shared.Entities
@@ -188,7 +188,7 @@
                     <label class="form-label">Şifre <span class="text-danger">*</span></label>
                     <div class="input-group">
                         <input type="@(sifreGoster ? "text" : "password")" class="form-control"
-                               placeholder="En az 12 karakter" @bind="adminSifre" @bind:event="oninput" />
+                               placeholder="En az 8 karakter" @bind="adminSifre" @bind:event="oninput" />
                         <button class="btn btn-outline-secondary" type="button"
                                 @onclick="() => sifreGoster = !sifreGoster">
                             <i class="bi @(sifreGoster ? "bi-eye-slash" : "bi-eye")"></i>
@@ -499,7 +499,7 @@
 
         if (string.IsNullOrWhiteSpace(adminAdSoyad))   { hataMesaji = "Ad Soyad zorunludur."; return; }
         if (string.IsNullOrWhiteSpace(adminKullaniciAdi)) { hataMesaji = "Kullanıcı adı zorunludur."; return; }
-        if (adminSifre.Length < 12)                     { hataMesaji = "Şifre en az 12 karakter olmalıdır."; return; }
+        if (adminSifre.Length < 8)                      { hataMesaji = "Şifre en az 8 karakter olmalıdır."; return; }
         if (adminSifre != adminSifreTekrar)             { hataMesaji = "Şifreler eşleşmiyor."; return; }
 
         islemDevamEdiyor = true;

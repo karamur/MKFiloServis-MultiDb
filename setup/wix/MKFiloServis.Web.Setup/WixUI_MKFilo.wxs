@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WixUI_MKFilo: Hos geldiniz -> PostgreSQL baglantisi -> Ozet -> Ilerleme -> Bitti
+  Guncellemede (mevcut dbsettings.json / onceki surum) baglanti sayfasi atlanir.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <UI Id="WixUI_MKFilo">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="MKFilo" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+      <DialogRef Id="VerifyReadyDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="PgConnectionDlg"
+               Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT EXISTING_DBSETTINGS" />
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg"
+               Condition="Installed OR WIX_UPGRADE_DETECTED OR EXISTING_DBSETTINGS" />
+
+      <Publish Dialog="PgConnectionDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
+      <Publish Dialog="PgConnectionDlg" Control="Next" Event="SpawnDialog" Value="PgInvalidDlg" Order="1"
+               Condition="PG_HOST = &quot;&quot; OR PG_PORT = &quot;&quot; OR PG_DATABASE = &quot;&quot; OR PG_USER = &quot;&quot;" />
+      <Publish Dialog="PgConnectionDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="2"
+               Condition="PG_HOST &lt;&gt; &quot;&quot; AND PG_PORT &lt;&gt; &quot;&quot; AND PG_DATABASE &lt;&gt; &quot;&quot; AND PG_USER &lt;&gt; &quot;&quot;" />
+
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="PgConnectionDlg" Order="1"
+               Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED AND NOT EXISTING_DBSETTINGS" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2"
+               Condition="NOT Installed AND (WIX_UPGRADE_DETECTED OR EXISTING_DBSETTINGS)" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="3"
+               Condition="Installed AND NOT PATCH" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="4"
+               Condition="Installed AND PATCH" />
+
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+
+      <!-- PostgreSQL baglanti bilgileri (yalnizca mevcut veritabanina baglanti) -->
+      <Dialog Id="PgConnectionDlg" Width="370" Height="270" Title="!(loc.PgDlgTitle)">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.PgDlgHeader)" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="15" Transparent="yes" NoPrefix="yes" Text="!(loc.PgDlgDescription)" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="Info" Type="Text" X="20" Y="52" Width="330" Height="26" NoPrefix="yes" Text="!(loc.PgDlgInfo)" />
+
+        <Control Id="HostLabel" Type="Text" X="20" Y="84" Width="110" Height="12" NoPrefix="yes" Text="!(loc.PgDlgHost)" />
+        <Control Id="HostEdit" Type="Edit" X="135" Y="82" Width="210" Height="16" Property="PG_HOST" />
+
+        <Control Id="PortLabel" Type="Text" X="20" Y="106" Width="110" Height="12" NoPrefix="yes" Text="!(loc.PgDlgPort)" />
+        <Control Id="PortEdit" Type="Edit" X="135" Y="104" Width="60" Height="16" Property="PG_PORT" Integer="yes" />
+
+        <Control Id="DatabaseLabel" Type="Text" X="20" Y="128" Width="110" Height="12" NoPrefix="yes" Text="!(loc.PgDlgDatabase)" />
+        <Control Id="DatabaseEdit" Type="Edit" X="135" Y="126" Width="210" Height="16" Property="PG_DATABASE" />
+
+        <Control Id="UserLabel" Type="Text" X="20" Y="150" Width="110" Height="12" NoPrefix="yes" Text="!(loc.PgDlgUser)" />
+        <Control Id="UserEdit" Type="Edit" X="135" Y="148" Width="210" Height="16" Property="PG_USER" />
+
+        <Control Id="PasswordLabel" Type="Text" X="20" Y="172" Width="110" Height="12" NoPrefix="yes" Text="!(loc.PgDlgPassword)" />
+        <Control Id="PasswordEdit" Type="Edit" X="135" Y="170" Width="210" Height="16" Property="PG_PASSWORD" Password="yes" />
+
+        <Control Id="Note" Type="Text" X="20" Y="196" Width="330" Height="30" NoPrefix="yes" Text="!(loc.PgDlgNote)" />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="PgInvalidDlg" Width="260" Height="85" Title="!(loc.PgDlgTitle)">
+        <Control Id="Text" Type="Text" X="48" Y="15" Width="194" Height="40" NoPrefix="yes" Text="!(loc.PgDlgInvalid)" />
+        <Control Id="Icon" Type="Icon" X="15" Y="15" Width="24" Height="24" ToolTip="!(loc.InvalidDirDlgIconTooltip)" FixedSize="yes" IconSize="32" Text="!(loc.InvalidDirDlgIcon)" />
+        <Control Id="Return" Type="PushButton" X="100" Y="57" Width="56" Height="17" Default="yes" Cancel="yes" Text="!(loc.WixUIOK)">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+      </Dialog>
+    </UI>
+
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

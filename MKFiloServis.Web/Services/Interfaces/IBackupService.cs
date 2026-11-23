@@ -1,4 +1,4 @@
-namespace MKFiloServis.Web.Services.Interfaces;
+﻿namespace MKFiloServis.Web.Services.Interfaces;
 
 public interface IBackupService
 {
@@ -17,6 +17,8 @@ public interface IBackupService
     // ── Dosya / Veri Yedeği ─────────────────────────────────────────
     Task<BackupResult> CreateFileBackupAsync(CancellationToken cancellationToken = default);
     Task<BackupResult> CreateFullBackupAsync(CancellationToken cancellationToken = default);
+    Task<BackupResult> CreateRecoveryBackupAsync(CancellationToken cancellationToken = default);
+    IReadOnlyList<BackupInfo> GetRecoveryBackupList();
     Task<List<BackupInfo>> GetFileBackupListAsync();
     Task<bool> DeleteFileBackupAsync(string backupFileName);
     Task CleanupOldFileBackupsAsync(int keepCount = 10);

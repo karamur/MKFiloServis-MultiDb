@@ -1,4 +1,4 @@
-# Run from an elevated Windows PowerShell session on the IIS computer.
+﻿# Run from an elevated Windows PowerShell session on the IIS computer.
 # The generated JWT secret is stored only in this machine's IIS application pool configuration.
 [CmdletBinding()]
 param(
@@ -7,6 +7,7 @@ param(
     [ValidateRange(1, 65535)] [int]$Port = 5050,
     [string]$AppPath = 'C:\MKFiloServis\app',
     [string]$StorageRoot = 'C:\MKFiloServis_yedekleme',
+    [switch]$PreserveStorageRoot,
     [switch]$RestartAppPool
 )
 
@@ -48,11 +49,6 @@ trap {
     catch { }
     throw
 }
-foreach ($relative in @('', 'uploads', 'Arsiv', 'Depo', 'data', 'database', 'keys', 'logs')) {
-    $directory = if ($relative -eq '') { $StorageRoot } else { Join-Path $StorageRoot $relative }
-    New-Item -ItemType Directory -Path $directory -Force | Out-Null
-}
-
 $administrationDll = Join-Path $env:windir 'System32\inetsrv\Microsoft.Web.Administration.dll'
 if (-not (Test-Path -LiteralPath $administrationDll)) {
     throw 'IIS yonetim kutuphanesi bulunamadi. IIS kurulumu tamamlanmamis olabilir.'
@@ -120,6 +116,19 @@ try {
             break
         }
     }
+    if ($PreserveStorageRoot -and $null -ne $storageEntry) {
+        $existingRoot = [string]$storageEntry.GetAttributeValue('value')
+        if (-not [string]::IsNullOrWhiteSpace($existingRoot)) {
+            $StorageRoot = [IO.Path]::GetFullPath($existingRoot)
+            if (-not (Test-Path -LiteralPath $StorageRoot -PathType Container)) {
+                throw "Mevcut depolama klasorune erisilemiyor: $StorageRoot. Arsiv ve anahtarlari kontrol edin."
+            }
+        }
+    }
+    foreach ($relative in @('', 'uploads', 'Arsiv', 'Depo', 'data', 'database', 'keys', 'logs')) {
+        $directory = if ($relative -eq '') { $StorageRoot } else { Join-Path $StorageRoot $relative }
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
     if ($null -eq $storageEntry) {
         $storageEntry = $variables.CreateElement('add')
         $storageEntry.SetAttributeValue('name', 'CRMFILO_STORAGE_ROOT')
@@ -179,6 +188,29 @@ $icacls = Join-Path $env:windir 'System32\icacls.exe'
 if ($LASTEXITCODE -ne 0) {
     throw "Depolama klasorunun erisim izinleri ayarlanamadi: $StorageRoot"
 }
+$recoveryRoot = Join-Path $StorageRoot 'Kurtarma'
+for ($candidate = $recoveryRoot; $candidate; $candidate = Split-Path -Parent $candidate) {
+    if (Test-Path -LiteralPath $candidate) {
+        if ((Get-Item -LiteralPath $candidate -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "Kurtarma dizini baglanti iceremez: $candidate"
+        }
+    }
+}
+$recoveryAcl = New-Object Security.AccessControl.DirectorySecurity
+$recoveryAcl.SetAccessRuleProtection($true, $false)
+$poolAccount = New-Object Security.Principal.NTAccount("IIS AppPool\$AppPoolName")
+$recoverySids = @((New-Object Security.Principal.SecurityIdentifier('S-1-5-18')), (New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')), $poolAccount.Translate([Security.Principal.SecurityIdentifier]))
+foreach ($sid in $recoverySids) {
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $recoveryAcl.AddAccessRule($rule)
+}
+if (Test-Path -LiteralPath $recoveryRoot -PathType Container) {
+    [IO.Directory]::SetAccessControl($recoveryRoot, $recoveryAcl)
+}
+else {
+    [void][IO.Directory]::CreateDirectory($recoveryRoot, $recoveryAcl)
+}
+Write-Warning "Kurtarma dizini: $recoveryRoot. Yedekleme ve Kurtarma ekranindan yedek alin; dizini ayri ve korumali bir ortama kopyalayin."
 & $icacls $logPath /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' "IIS AppPool\${AppPoolName}:(OI)(CI)M" | Out-Null
 if ($LASTEXITCODE -ne 0) {
     throw "IIS stdout log klasorunun erisim izinleri ayarlanamadi: $logPath"

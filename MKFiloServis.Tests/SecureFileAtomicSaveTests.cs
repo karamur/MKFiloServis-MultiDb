@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
@@ -12,6 +12,121 @@ namespace MKFiloServis.Tests;
 
 public sealed class SecureFileAtomicSaveTests
 {
+    [Theory]
+    [InlineData("complete")]
+    [InlineData("missing-xml")]
+    [InlineData("missing-koa1")]
+    public async Task Recovery_backup_publishes_only_when_required_key_material_is_present(string scenario)
+    {
+        var previousRoot = Environment.GetEnvironmentVariable("CRMFILO_STORAGE_ROOT");
+        var root = Path.Combine(Path.GetTempPath(), "mkfiloservis-recovery-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable("CRMFILO_STORAGE_ROOT", root);
+            var keys = Directory.CreateDirectory(Path.Combine(root, "keys"));
+            var writerKeys = scenario == "missing-xml" ? Directory.CreateDirectory(Path.Combine(root, "other-keys")) : keys;
+            var provider = DataProtectionProvider.Create(keys, options => options.SetApplicationName("MKFiloServis"));
+            var writer = DataProtectionProvider.Create(writerKeys, options => options.SetApplicationName("MKFiloServis"));
+            var archiveDirectory = Directory.CreateDirectory(Path.Combine(root, "Arsiv"));
+            var bytes = "archive content"u8.ToArray();
+            var encrypted = scenario == "missing-koa1"
+                ? new AesGcmFileProtector(new TestMasterKeyProvider()).Protect(bytes)
+                : new DataProtectionFileProtector(writer).Protect(bytes);
+            await File.WriteAllBytesAsync(Path.Combine(archiveDirectory.FullName, "document.pdf"), encrypted);
+            var recoveryDirectory = RecoveryArchive.EnsureBackupDirectory(root, Path.Combine(root, "wwwroot"));
+            var zip = Path.Combine(recoveryDirectory, "backup.zip");
+            Task Create() => RecoveryArchive.CreateAsync(zip, root, provider, null, CancellationToken.None, verifyRecoveryKeys: true);
+
+            if (scenario == "complete")
+            {
+                await Create();
+                var prepared = await RecoveryArchive.PrepareAsync(zip, root, null, CancellationToken.None);
+                Assert.True(prepared.KeyProbeVerified);
+                Assert.Equal(encrypted, await File.ReadAllBytesAsync(Path.Combine(prepared.FolderPath!, "storage", "Arsiv", "document.pdf")));
+            }
+            else
+            {
+                await Assert.ThrowsAsync<InvalidDataException>(Create);
+                Assert.Empty(Directory.EnumerateFileSystemEntries(recoveryDirectory));
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CRMFILO_STORAGE_ROOT", previousRoot);
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Archive_reads_plain_and_encrypted_formats_after_reopening_the_same_key_ring()
+    {
+        var previousRoot = Environment.GetEnvironmentVariable("CRMFILO_STORAGE_ROOT");
+        var root = Path.Combine(Path.GetTempPath(), "mkfiloservis-archive-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable("CRMFILO_STORAGE_ROOT", root);
+            var environment = new TestWebHostEnvironment(root);
+            var keys = new DirectoryInfo(Path.Combine(root, "keys"));
+            var writer = DataProtectionProvider.Create(keys, options => options.SetApplicationName("MKFiloServis"));
+            var masterKey = new TestMasterKeyProvider();
+            var aes = new AesGcmFileProtector(masterKey);
+            var aesWithVersion = aes.Protect("ARŞİV"u8);
+            byte[] plain = "ARŞİV"u8.ToArray();
+            (string Name, ArchiveFileFormat Format, byte[] Bytes)[] fixtures =
+            [
+                ("plain.pdf", ArchiveFileFormat.Plain, plain),
+                ("current.pdf.enc", ArchiveFileFormat.DataProtection, new DataProtectionFileProtector(writer).Protect(plain)),
+                ("current-no-enc.pdf", ArchiveFileFormat.DataProtection, new DataProtectionFileProtector(writer).Protect(plain)),
+                ("old-aes.pdf.enc", ArchiveFileFormat.LegacyAes, aesWithVersion),
+                ("old-aes-no-version.pdf", ArchiveFileFormat.LegacyAes, [.. aesWithVersion[..4], .. aesWithVersion[5..]]),
+                ("old-dp.pdf", ArchiveFileFormat.LegacyEncrypted, writer.CreateProtector("MKFiloServis.SecureFileStorage.v1").Protect(plain))
+            ];
+
+            var directory = Path.Combine(root, "Arsiv", "Sifreli");
+            Directory.CreateDirectory(directory);
+            foreach (var (name, _, bytes) in fixtures)
+                await File.WriteAllBytesAsync(Path.Combine(directory, name), bytes);
+            await File.WriteAllBytesAsync(Path.Combine(directory, "broken.pdf"), "MKD1"u8.ToArray());
+
+            using var services = new ServiceCollection().BuildServiceProvider();
+            ArchiveBrowserService Open(DirectoryInfo keyDirectory)
+            {
+                var provider = DataProtectionProvider.Create(keyDirectory, options => options.SetApplicationName("MKFiloServis"));
+                var secure = new SecureFileService(new DataProtectionFileProtector(provider), masterKey, provider, environment,
+                    NullLogger<SecureFileService>.Instance, new TestRecoveryTracker(), new FileCleanupJournal(provider, environment),
+                    services.GetRequiredService<IServiceScopeFactory>());
+                return new ArchiveBrowserService(environment, secure);
+            }
+
+            var browser = Open(keys);
+            var listed = browser.GetFiles("Arsiv").ToDictionary(file => file.StorageRelativePath, file => file.Format);
+            foreach (var (name, format, bytes) in fixtures)
+            {
+                var path = $"Arsiv/Sifreli/{name}";
+                var opened = await browser.ReadFileAsync(path);
+                Assert.Equal(format, listed[path]);
+                Assert.Equal(format, opened.Format);
+                Assert.Equal(name.EndsWith(".enc", StringComparison.Ordinal) ? name[..^4] : name, opened.DisplayName);
+                Assert.Equal(plain, opened.Content);
+                Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(directory, name)));
+            }
+
+            var missingKey = await Open(new DirectoryInfo(Path.Combine(root, "different-keys")))
+                .ReadFileAsync("Arsiv/Sifreli/current-no-enc.pdf");
+            Assert.Equal(ArchiveFileFormat.DataProtection, missingKey.Format);
+            Assert.Null(missingKey.Content);
+            var broken = await browser.ReadFileAsync("Arsiv/Sifreli/broken.pdf");
+            Assert.Equal(ArchiveFileFormat.DataProtection, broken.Format);
+            Assert.Null(broken.Content);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => browser.ReadFileAsync("Arsiv/../keys/master.key"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CRMFILO_STORAGE_ROOT", previousRoot);
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task SaveEncryptedAsync_publishes_complete_file_without_temporary_files()
     {

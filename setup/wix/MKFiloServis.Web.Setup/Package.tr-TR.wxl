@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="tr-TR" Codepage="1254" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+  <String Id="DowngradeError" Value="Bu bilgisayarda MKFiloServis'in daha yeni bir sürümü kurulu. Önce onu kaldırın." />
+  <String Id="NeedAdmin" Value="MKFiloServis kurulumu yönetici yetkisi gerektirir." />
+  <String Id="Need64Bit" Value="MKFiloServis yalnızca 64-bit Windows üzerinde kurulabilir." />
+  <String Id="OpenBrowserCheckbox" Value="Uygulamayı tarayıcıda aç (http://localhost:5050)" />
+  <String Id="RecoveryBackupReminder" Value="Ayarlar / Yedekleme ve Kurtarma ekranından yedek alın. Kurtarma dizinini ayrı, korumalı bir diske kopyalayın." />
+
+  <String Id="ShortcutOpenApp" Value="MKFiloServis" />
+  <String Id="ShortcutDataSync" Value="MKFiloServis - Veri Aktarım" />
+  <String Id="ShortcutOpenFolder" Value="MKFiloServis - Kurulum Klasörü" />
+
+  <String Id="PgDlgTitle" Value="[ProductName] Kurulumu" />
+  <String Id="PgDlgHeader" Value="{\WixUI_Font_Title}PostgreSQL Veritabanı Bağlantısı" />
+  <String Id="PgDlgDescription" Value="Uygulamanın bağlanacağı MEVCUT PostgreSQL veritabanının bilgilerini girin." />
+  <String Id="PgDlgInfo" Value="Kurulum PostgreSQL kurmaz, veritabanı oluşturmaz ve yedek yüklemez. Veritabanı önceden oluşturulmuş olmalıdır; tablolar uygulamanın ilk açılışında hazırlanır." />
+  <String Id="PgDlgHost" Value="Sunucu (host):" />
+  <String Id="PgDlgPort" Value="Port:" />
+  <String Id="PgDlgDatabase" Value="Veritabanı adı:" />
+  <String Id="PgDlgUser" Value="Kullanıcı adı:" />
+  <String Id="PgDlgPassword" Value="Parola:" />
+  <String Id="PgDlgNote" Value="Bilgiler C:\MKFiloServis\app\dbsettings.json dosyasına yazılır ve yalnızca SYSTEM, Administrators ve IIS uygulama havuzu okuyabilir. Parola çift tırnak içeremez ve ters bölü ile bitemez." />
+  <String Id="PgDlgInvalid" Value="Sunucu, port, veritabanı adı ve kullanıcı adı alanları boş bırakılamaz." />
+</WixLocalization>
