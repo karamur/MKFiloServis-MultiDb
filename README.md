@@ -1,168 +1,81 @@
 ﻿# MKFiloServis
 
-**MKFiloServis**, filo ve servis operasyonlarını, finansal süreçleri ve kurumsal yönetim araçlarını tek bir çok firmalı ERP platformunda bir araya getiren .NET tabanlı bir çözümdür. Ana uygulama Blazor ile geliştirilmiştir; çözüm ayrıca ortak domain bileşenlerini, lisans yönetim aracını ve veri eşitleme uygulamasını içerir.
+MKFiloServis, birden fazla firmanın araçlarını, kiralama sözleşmelerini, servis operasyonlarını ve mali kayıtlarını tek bir web uygulamasında yönetmek için geliştirilmiş bir ERP sistemidir. Kullanıcının çalışabileceği kayıtlar ve modüller; etkin firma, rol yetkileri ve lisans kapsamına göre belirlenir.
 
-[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
-[![Blazor](https://img.shields.io/badge/Blazor-Server-512BD4?logo=blazor)](https://learn.microsoft.com/aspnet/core/blazor/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-Proprietary-red)]()
+[![Testler](https://github.com/karamur/MKFiloServis-MultiDb/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/karamur/MKFiloServis-MultiDb/actions/workflows/tests.yml)
 
----
+**[Windows sunucusuna kurulum](setup/README.md)** · **[Geliştirici başlangıcı](#geliştirici-başlangıcı)** · **[Yedekleme ve kurtarma](MKFiloServis.Web/DOSYA_RECOVERY_KILAVUZU.md)** · **[Güvenlik bildirimi](SECURITY.md)**
 
-## İçindekiler
+## Neler yapabilirsiniz?
 
-- [Öne çıkan yetenekler](#öne-çıkan-yetenekler)
-- [Teknik mimari](#teknik-mimari)
-- [Depo yapısı](#depo-yapısı)
-- [Geliştirme ortamını hazırlama](#geliştirme-ortamını-hazırlama)
-- [Yapılandırma](#yapılandırma)
-- [Doğrulama ve test](#doğrulama-ve-test)
-- [Dağıtım paketleri](#dağıtım-paketleri)
-- [Güvenlik ve destek](#güvenlik-ve-destek)
+| İş alanı | Örnek iş akışı |
+| --- | --- |
+| Filo ve servis | Araç kartından plaka, bakım ve evrak kayıtlarını takip edin. |
+| Rent a Car | Tarih aralığına göre müsait araçları bulun; rezervasyonu kiralamaya dönüştürün, sözleşme bazında ödeme ve depozitoyu izleyin. |
+| Cari ve finans | Cari hesapları, faturaları, ödemeleri ve borç/alacak hareketlerini firma bazında takip edin. |
+| Personel ve operasyon | Personel ve şoför kayıtlarını, operasyon planını ve puantajı yönetin. |
+| Belge ve arşiv | Yetkiniz kapsamındaki araç ve personel evraklarını uygulamadan açın, ön izleyin veya indirin. |
 
-## Öne çıkan yetenekler
+Rent a Car sözleşmeleri ve teslim/iade tutanakları **taslaktır**. Yakıt, hasar, aksesuar ve imza bilgileri teslim sırasında ayrıca teyit edilmelidir.
 
-Ürün modülleri kullanıcı yetkileri ve etkin firma bağlamı üzerinden çalışır. Kurulumdaki etkin modüller yapılandırmaya ve dağıtım profiline göre farklılık gösterebilir.
+## Windows sunucusuna kurulum
 
-| Alan | Kapsam |
-|---|---|
-| Filo ve araç yönetimi | Araç kayıtları, plaka ve araç evrakları, bakım ve filo süreçleri |
-| Rent a Car | Rezervasyon, tarih aralığına göre müsait araç bulma, kiralama listesi ve durum takibi |
-| Rent a Car belgeleri | Kiralama kaydından sözleşme taslağı ve teslim/iade tutanağı ön izlemesi; tarayıcıdan yazdırma veya PDF olarak kaydetme |
-| Cari ve finans | Cari kartlar, borç/alacak takibi, fatura ve ödeme süreçleri |
-| Personel ve operasyon | Personel/şoför, operasyon ve puantaj iş akışları |
-| Yönetim ve araçlar | Lisanslama, veri eşitleme, raporlama ve sistem yönetimi araçları |
+1. 64 bit Windows sunucusunda erişilebilir bir **PostgreSQL veritabanı** hazırlayın. Kurucu PostgreSQL kurmaz, veritabanı oluşturmaz ve yedek yüklemez. Mevcut, boş bir veritabanında uygulama ilk açılışta tabloları oluşturabilir; bağlantı kullanıcısına gerekli şema izinlerini verin.
+2. Yeni sunucuda `MKFiloServisKurulum-1.0.48.exe` paketini yönetici olarak çalıştırın. Paket IIS'i yapılandırır ve gereken .NET 10 Hosting Bundle bileşenini kurar. **Yeni sunucuda yalnız Web MSI'ını çalıştırmayın:** ASP.NET Core IIS modülü (ANCM) eksik kalabilir.
+3. Kurulum tamamlanınca sunucuda `http://localhost:5050` adresini açın. [İlk yönetici hesabı yönergelerini](setup/README.md#iis-kurulumunda-ilk-giriş) izleyin. Varsayılan hesap oluşturulduysa uygulamayı ağa açmadan önce parolasını değiştirin; dış erişim için HTTPS yapılandırın.
 
-Rent a Car belge çıktıları uygulamadaki cari, firma ve kiralama kayıtlarından oluşturulan **düzenlenebilir kontrol taslaklarıdır**. Teslim/iade tutanağındaki yakıt, hasar ve aksesuar kontrolleri mevcut kayıt alanlarında saklanmadığından çıktı üzerinde doldurulmaları gerekir. Bu şablonlar tek başına hukuken onaylı, resmî sözleşme veya mevzuat formu yerine geçmez; kullanımdan önce şirket yetkilisi ve hukuk danışmanı tarafından gözden geçirilip onaylanmalıdır. Resmî kullanım için gereken ek sürücü, sürücü belgesi, sigorta/hasar, kilometre-yakıt teyidi ve imza/elektronik onay süreçleri ayrıca tanımlanıp doğrulanmalıdır.
+**Mevcut kurulum:** `MKFiloServisGuncelle-1.0.48.exe` uygulama dosyalarını günceller; mevcut veritabanı bağlantısı ve depolama dizini korunur. `MKLisansArac-1.0.48.msi` ise ayrı bir kullanıcı bazlı lisans yönetim aracıdır; web sunucusunu çalıştırmak için gerekli değildir.
 
-## Mimari
+## Geliştirici başlangıcı
 
-### İşleyiş akış şeması
-
-```mermaid
-flowchart TB
-    UI[Blazor Interactive Server UI] --> APP[Uygulama ve Servis Katmanı]
-    API[REST API / JWT] --> APP
-    JOBS[Quartz Arka Plan İşleri] --> APP
-    APP --> EF[EF Core 10 / ApplicationDbContext]
-    APP --> FILES[Şifreli Dosya ve Belge Servisleri]
-    APP --> AI[Ollama / Harici AI Sağlayıcıları]
-    EF --> DB[(Veritabanı)]
-    DB --> TENANT[FirmaId + IsDeleted İzolasyonu]
-```
-
-- **Web uygulaması:** ASP.NET Core Blazor Interactive Server, .NET 10.
-- **Ortak katman:** Paylaşılan entity ve sözleşmeler.
-- **Veri erişimi:** Entity Framework Core; çözümde SQL Server, PostgreSQL, MySQL ve SQLite sağlayıcı paketleri bulunur. Etkin sağlayıcı ve bağlantı ayarı çalışma zamanı yapılandırmasına bağlıdır.
-- **Firma kapsamı:** Firma bağlamı ve kiracı kapsamı servis/veri erişim katmanında uygulanır; davranış dağıtım yapılandırmasına göre doğrulanmalıdır.
-- **Belge ve raporlama:** PDF/Excel çıktıları ve tarayıcı yazdırma yardımcıları.
-- **Arka plan işleri ve entegrasyonlar:** Çözüm bileşenleri kapsamında Quartz.NET ve yapılandırılabilir servisler.
-
-## Proje Yapısı
-
-```
-MKFiloServis-MultiDb/
-├── MKFiloServis.Web/              # Blazor web uygulaması ve servisler
-│   └── Tests/                     # Rent a Car kontrolleri ve smoke test projeleri
-├── MKFiloServis.Shared/           # Paylaşılan domain modelleri ve sözleşmeler
-├── MKFiloServis.Client/           # MAUI istemci (Android + Windows)
-├── MKFiloServis.DataSync/         # Veri eşitleme aracı
-├── MKFiloServis.LisansDesktop/    # Windows lisans yönetim uygulaması
-├── MKFiloServis.Tests/            # xUnit birim ve izole veritabanı testleri
-├── docs/                          # Ürün ve teknik dokümantasyon
-├── setup/                         # Kurulum paketi betikleri
-└── scripts/                       # Geliştirme ve dağıtım yardımcıları
-```
-
-> `MKFiloServis.Tests` çözümde bulunur ve CI üzerinde zorunlu çalışır. Kritik satış kabul
-> senaryolarının tamamı henüz bu projeye taşınmadı.
-
-## Başlarken
-
-### Gereksinimler
-
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Repodaki hedef framework’ler için ilgili .NET SDK’ları
-- Microsoft Visual Studio 2026 veya güncel `dotnet` CLI
-- Seçilen veritabanı sağlayıcısına uygun erişilebilir veritabanı
-
-### Geliştirme Ortamı
+Windows'ta [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) ile aşağıdaki komutları çalıştırın. Yalnız web uygulamasını geliştirmek için MAUI istemcisini derlemeniz gerekmez.
 
 ```powershell
 git clone https://github.com/karamur/MKFiloServis-MultiDb.git
 cd MKFiloServis-MultiDb
-
-dotnet restore .\MKFiloServis.slnx
-dotnet build .\MKFiloServis.slnx
-```
-
-Web uygulamasını yerel ortamınızın veritabanı ve gizli ayarları yapılandırıldıktan sonra başlatın:
-
-```powershell
-dotnet run --project .\MKFiloServis.Web\MKFiloServis.Web.csproj
-```
-
-Alternatif olarak kökteki `start.bat` kullanılabilir. Betik kaynak projeyi Development
-ortamında derleyip başlatır; publish klasöründe ise Production olarak çalıştırır.
-5050–5069 aralığında uygun port seçilir ve tarayıcı yalnız `/healthz` başarılı olduktan
-sonra açılır. Betik ve PowerShell yardımcısı publish çıktısına da eklenir.
-
-Veritabanına veya uygulamaya dokunmadan ön kontrol:
-
-```powershell
+dotnet build .\MKFiloServis.Web\MKFiloServis.Web.csproj
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1 -CheckOnly
 ```
 
-Farklı klasör/port için `-AppPath 'C:\MKFiloServis\app' -Port 5050`, tarayıcısız
-çalıştırma için `-NoBrowser` kullanılabilir. Framework-dependent publish, .NET 10
-ASP.NET Core Runtime gerektirir; kaynak proje ayrıca uyumlu SDK gerektirir.
-Production'da `Jwt__Secret` korumalı ortam değişkeninden sağlanmalıdır; dosyaya veya
-komut satırına yazılmaz. IIS için `setup\README.md` içindeki yapılandırma yönergelerini kullanın.
-
-### Masaüstü ve mobil uygulama olarak kurulum
-
-MKFiloServis web uygulaması PWA olarak kurulabilir. Web uygulamasını HTTPS üzerinden yayımlayın, bilgisayar veya telefonda desteklenen tarayıcıdan açın ve **Uygulamayı yükle** seçeneğini kullanın. iPhone/iPad'de Safari paylaş menüsünden **Ana Ekrana Ekle** seçilir. Masaüstünde Chrome/Edge kurulum simgesi veya tarayıcı menüsü kullanılabilir.
-
-Kurulan uygulama aynı sunucudaki Blazor uygulamasına bağlanır; cihazda yerel veritabanı barındırmaz ve çevrimdışı işlem yapmaz. Geliştirme ortamında `localhost` masaüstünde kurulabilir; telefondan erişim için uygulamayı telefonun ulaşabildiği bir HTTPS adresinde yayımlayın. HTTPS olmayan yerel ağ adreslerinde tarayıcı PWA kurulumunu ve service worker'ı engelleyebilir.
-
-> Uygulamanın adresi ve bağlantı noktası etkin ASP.NET Core yapılandırmasına bağlıdır; çalıştırma çıktısındaki adresi kullanın. Gerçek ortam sırlarını kaynak koda veya Git’e eklemeyin.
-
-## Yapılandırma
-
-Uygulama ayarları, ortam değişkenleri ve dağıtım profilinin desteklediği yapılandırma dosyaları üzerinden sağlanır. Başlangıç öncesinde ilgili proje ve dağıtım belgelerini inceleyin.
-
-- Veritabanı sağlayıcısını ve bağlantı ayarlarını ortama göre tanımlayın.
-- Bu satış sürümünde yalnız PostgreSQL ve SQLite çalışma zamanı desteklenir.
-- PostgreSQL hedef veritabanı, boş şema baseline işleminden önce oluşturulur; kullanıcının gerekli oluşturma yetkisi olmalıdır veya veritabanı önceden hazırlanmalıdır.
-- Kimlik doğrulama, lisanslama, e-posta ve entegrasyon sırlarını güvenli yapılandırma deposu veya ortam değişkenleriyle sağlayın.
-- Veritabanı şeması ve başlangıç verileri için projenin migration/kurulum yönergelerini izleyin.
-- Kullanıcıya gerekli firma ve modül yetkilerini tanımlayın.
-
-## Doğrulama ve test
+`-CheckOnly`, uygulamayı başlatmadan ortamı ve portu kontrol eder. Geliştirme için **üretimden ayrı** bir SQLite veya PostgreSQL veritabanı yapılandırın, ardından `.\start.bat` komutunu çalıştırın. Başlatıcı varsayılan olarak 5050–5069 aralığında uygun portu seçer ve sağlık kontrolü başarılı olduğunda tarayıcıyı açar.
 
 ```powershell
-dotnet build .\MKFiloServis.slnx
+# Birim ve entegrasyon testleri
+dotnet test .\MKFiloServis.Tests\MKFiloServis.Tests.csproj
+
+# Rent a Car iş kuralları için ayrı kontroller
 dotnet run --project .\MKFiloServis.Web\Tests\RentACar\MKFiloServis.RentACarChecks.csproj
 ```
 
-Diğer test projeleri ve çalıştırma yönergeleri için `MKFiloServis.Web/Tests` içeriğini inceleyin.
+### Dağıtım paketlerini üretme
 
-## Dağıtım paketleri
-
-Tüm dağıtım paketleri `setup/build.ps1` ile üretilir:
+[WiX 6 ön koşullarını](setup/README.md) tamamladıktan sonra depo kökünden çalıştırın:
 
 ```powershell
-cd setup
-.\build.ps1 -Version 1.0.38
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup\build-wix.ps1 -Version 1.0.48
 ```
 
-Kurulum paketleri için `setup/README.md` ve `setup/build.ps1` yönergelerini izleyin. Paket türleri, sürüm ve kullanılabilir dağıtım seçenekleri kurulum profiline bağlıdır. Üretim dağıtımından önce veritabanı yedeği, ortam sırları, lisans, ağ erişimi ve geri dönüş planı doğrulanmalıdır.
+Web MSI, kurulum ve güncelleme paketleri (WiX Burn) ile lisans aracı MSI'ı `setup\output\v1.0.48\` altında üretilir. Bu ikili dosyalar kaynak depoda tutulmaz.
 
-## Güvenlik ve destek
+## Mimari ve depo haritası
 
-- Güvenlik bildirimleri için [SECURITY.md](SECURITY.md) dosyasına bakın.
-- Yapılandırma dosyalarına gerçek parola, API anahtarı veya kişisel veri eklemeyin.
-- Kimlik/vergi numaraları ve sözleşme çıktıları hassas veri içerebilir; erişim ve saklama politikasını dağıtım ortamında uygulayın.
-- Hata bildirirken hassas verileri kaldırın; yeniden üretim adımlarını ve ortam bilgilerini ekleyin.
+Web katmanı **ASP.NET Core Blazor Interactive Server** kullanır. Uygulama servisleri verilere **Entity Framework Core** ile erişir; arka plan işleri **Quartz.NET** ile yürütülür. Web uygulaması desteklenen tarayıcılarda PWA olarak da kurulabilir; işlem yapmak için sunucu bağlantısı gerekir.
+
+| Bileşen | Sorumluluk |
+| --- | --- |
+| [Web](MKFiloServis.Web/) | Web arayüzü, API, iş kuralları, veri erişimi ve arka plan işleri |
+| [Shared](MKFiloServis.Shared/) | Paylaşılan veri modelleri, sözleşmeler ve lisans doğrulama kuralları |
+| [Client](MKFiloServis.Client/) | Windows ve Android için .NET MAUI istemcisi |
+| [DataSync](MKFiloServis.DataSync/) | SQLite verilerinin PostgreSQL'e aktarımı; gerektiğinde uygulama şemasının hazırlanması |
+| [LisansDesktop](MKFiloServis.LisansDesktop/) | Windows üzerinde lisans oluşturma ve yönetimi |
+| [Tests](MKFiloServis.Tests/) | xUnit testleri ve izole veritabanı senaryoları |
+
+## Yedekleme ve kurtarma
+
+**Ayarlar → Yedekleme ve Kurtarma → Kurtarma Dizini Oluştur ve Yedekle** işlemi, PostgreSQL dökümünü, yerel arşivleri, ayarları ve dosya anahtarlarını bir kurtarma ZIP'inde toplar. Veritabanı ve dosyalar art arda kopyalandığından tutarlı bir yedek için işlemi yazımların durdurulduğu bakım penceresinde çalıştırın. PostgreSQL istemci araçları sunucuda bulunmalıdır; `pg_dump` sunucunun ana sürümünden eski olmamalıdır.
+
+Varsayılan kurtarma dizini `C:\MKFiloServis_yedekleme\Kurtarma` yoludur. **Bu dizini ayrı, şifreli ve erişimi sınırlandırılmış bir ortama kopyalayın.** Kurtarma ZIP'i hassas bilgiler içerir ve kendi başına parola korumalı değildir. Anahtar dosyalarının bulunması, başka bir Windows makinesinde şifreli belgelerin açılacağını garanti etmez. Canlı geri yüklemeden önce [kurtarma kılavuzundaki](MKFiloServis.Web/DOSYA_RECOVERY_KILAVUZU.md) anahtar kontrolünü ve örnek belge açma provasını yapın.
+
+Güvenlik açıklarını [güvenlik bildirim politikasına](SECURITY.md) göre bildirin. Hata raporlarına parola, bağlantı dizesi, özel anahtar, kurtarma ZIP'i veya müşteri verisi eklemeyin.
 
 © MK Yazılım. Tüm hakları saklıdır.
