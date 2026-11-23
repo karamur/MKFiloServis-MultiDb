@@ -195,6 +195,7 @@ public class BackupService : IBackupService
             };
 
             processInfo.Environment["PGPASSWORD"] = connParts.GetValueOrDefault("Password", "");
+            processInfo.Environment["LC_MESSAGES"] = "C";
 
             using var process = System.Diagnostics.Process.Start(processInfo);
             if (process != null)
@@ -296,6 +297,7 @@ public class BackupService : IBackupService
             };
 
             processInfo.Environment["PGPASSWORD"] = connParts.GetValueOrDefault("Password", string.Empty);
+            processInfo.Environment["LC_MESSAGES"] = "C";
 
             using var process = System.Diagnostics.Process.Start(processInfo);
             if (process != null)
@@ -605,21 +607,7 @@ public class BackupService : IBackupService
         return parts;
     }
 
-    private string? FindPgDump()
-    {
-        var possiblePaths = new[]
-        {
-            @"C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\15\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\13\bin\pg_dump.exe",
-            "/usr/bin/pg_dump",
-            "/usr/local/bin/pg_dump"
-        };
-
-        return possiblePaths.FirstOrDefault(File.Exists);
-    }
+    private string? FindPgDump() => PostgreSqlClientTools.Find("pg_dump");
 
     private string? FindMySqlDump()
     {
@@ -983,6 +971,7 @@ public class BackupService : IBackupService
                     restoreInfo.ArgumentList.Add(argument);
 
                 restoreInfo.Environment["PGPASSWORD"] = password;
+                restoreInfo.Environment["LC_MESSAGES"] = "C";
 
                 _logger.LogInformation("PostgreSQL restore calistiriliyor: pg_restore -h {Host} -d {Database}", host, database);
 
@@ -1113,51 +1102,9 @@ public class BackupService : IBackupService
         }
     }
 
-    private string? FindPsql()
-    {
-        var pgDumpPath = FindPgDump();
-        if (!string.IsNullOrWhiteSpace(pgDumpPath))
-        {
-            var psqlPath = pgDumpPath.Replace("pg_dump", "psql", StringComparison.OrdinalIgnoreCase);
-            if (File.Exists(psqlPath))
-                return psqlPath;
-        }
+    private string? FindPsql() => PostgreSqlClientTools.Find("psql");
 
-        var commonPaths = new[]
-        {
-            @"C:\Program Files\PostgreSQL\17\bin\psql.exe",
-            @"C:\Program Files\PostgreSQL\16\bin\psql.exe",
-            @"C:\Program Files\PostgreSQL\15\bin\psql.exe",
-            @"C:\Program Files\PostgreSQL\14\bin\psql.exe",
-            "/usr/bin/psql",
-            "/usr/local/bin/psql"
-        };
-
-        return commonPaths.FirstOrDefault(File.Exists);
-    }
-
-    private string? FindPgRestore()
-    {
-        var pgDumpPath = FindPgDump();
-        if (!string.IsNullOrWhiteSpace(pgDumpPath))
-        {
-            var pgRestorePath = pgDumpPath.Replace("pg_dump", "pg_restore", StringComparison.OrdinalIgnoreCase);
-            if (File.Exists(pgRestorePath))
-                return pgRestorePath;
-        }
-
-        var commonPaths = new[]
-        {
-            @"C:\Program Files\PostgreSQL\17\bin\pg_restore.exe",
-            @"C:\Program Files\PostgreSQL\16\bin\pg_restore.exe",
-            @"C:\Program Files\PostgreSQL\15\bin\pg_restore.exe",
-            @"C:\Program Files\PostgreSQL\14\bin\pg_restore.exe",
-            "/usr/bin/pg_restore",
-            "/usr/local/bin/pg_restore"
-        };
-
-        return commonPaths.FirstOrDefault(File.Exists);
-    }
+    private string? FindPgRestore() => PostgreSqlClientTools.Find("pg_restore");
 
     private string? FindMySql()
     {

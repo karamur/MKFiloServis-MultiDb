@@ -216,20 +216,7 @@ public class DatabaseBackupService : IHostedService, IDisposable
         }
     }
 
-    private string? FindPgDump()
-    {
-        var possiblePaths = new[]
-        {
-            @"C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\15\bin\pg_dump.exe",
-            @"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe",
-            "/usr/bin/pg_dump",
-            "/usr/local/bin/pg_dump"
-        };
-
-        return possiblePaths.FirstOrDefault(File.Exists);
-    }
+    private string? FindPgDump() => PostgreSqlClientTools.Find("pg_dump");
 
     private async Task ExportWithPgDumpAsync(string connectionString, string outputPath, string pgDumpPath)
     {
@@ -254,6 +241,8 @@ public class DatabaseBackupService : IHostedService, IDisposable
             "-U", connection.Username ?? "", "-d", connection.Database ?? "", "--no-password" })
             info.ArgumentList.Add(argument);
         info.Environment["PGPASSWORD"] = connection.Password ?? "";
+        // Yerelleştirilmiş araç iletileri Windows kod sayfasıyla yazılır ve okunurken bozulur.
+        info.Environment["LC_MESSAGES"] = "C";
         return info;
     }
 
